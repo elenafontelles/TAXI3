@@ -3455,6 +3455,1595 @@ def test_unauthorized_access_returns_401():
 
 ---
 
+## 11. CI/CD & Deployment Automation
+
+### 11.1 Pre-commit Hooks (Calidad Automática)
+
+**`.pre-commit-config.yaml`**
+
+```yaml
+# Pre-commit hooks configuration
+# Install: pip install pre-commit
+# Setup: pre-commit install
+# Run: pre-commit run --all-files
+
+repos:
+  # Python code formatting
+  - repo: https://github.com/psf/black
+    rev: 24.1.0
+    hooks:
+      - id: black
+        language_version: python3.11
+        args: ['--line-length=100']
+
+  # Import sorting
+  - repo: https://github.com/pycqa/isort
+    rev: 5.13.2
+    hooks:
+      - id: isort
+        args: ['--profile', 'black', '--line-length', '100']
+
+  # Linting
+  - repo: https://github.com/pycqa/flake8
+    rev: 7.0.0
+    hooks:
+      - id: flake8
+        args: ['--max-line-length=100', '--extend-ignore=E203,W503']
+
+  # Type checking
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.8.0
+    hooks:
+      - id: mypy
+        additional_dependencies: [types-all]
+        args: ['--ignore-missing-imports', '--no-strict-optional']
+
+  # Security checks
+  - repo: https://github.com/pycqa/bandit
+    rev: 1.7.6
+    hooks:
+      - id: bandit
+        args: ['-c', 'pyproject.toml']
+        additional_dependencies: ['bandit[toml]']
+
+  # Trailing whitespace, EOF, YAML
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-added-large-files
+        args: ['--maxkb=1000']
+      - id: check-merge-conflict
+      - id: detect-private-key
+
+  # Secrets detection
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.4.0
+    hooks:
+      - id: detect-secrets
+        args: ['--baseline', '.secrets.baseline']
+
+  # SQL formatting
+  - repo: https://github.com/sqlfluff/sqlfluff
+    rev: 3.0.0
+    hooks:
+      - id: sqlfluff-lint
+        args: ['--dialect', 'postgres']
+
+  # Dockerfile linting
+  - repo: https://github.com/hadolint/hadolint
+    rev: v2.12.0
+    hooks:
+      - id: hadolint-docker
+```
+
+**Setup inicial:**
+
+```bash
+# Instalar pre-commit
+pip install pre-commit
+
+# Activar hooks en el repo
+pre-commit install
+
+# Ejecutar manualmente (primera vez)
+pre-commit run --all-files
+
+# Crear baseline de secretos (si hay .env.example, etc)
+detect-secrets scan > .secrets.baseline
+```
+
+---
+
+### 11.2 GitHub Actions - CI Pipeline
+
+**`.github/workflows/ci.yml`**
+
+```yaml
+name: CI Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+env:
+  PYTHON_VERSION: '3.11'
+  POSTGRES_VERSION: '15'
+
+jobs:
+  # ==================
+  # Linting & Security
+  # ==================
+  lint:
+    name: Lint & Security Checks
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: Cache dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements*.txt') }}
+      
+      - name: Install dependencies
+        run: |
+          pip install -r requirements-dev.txt
+      
+      - name: Run black
+        run: black --check src/ tests/
+      
+      - name: Run isort
+        run: isort --check-only src/ tests/
+      
+      - name: Run flake8
+        run: flake8 src/ tests/
+      
+      - name: Run mypy
+        run: mypy src/
+      
+      - name: Run bandit (security)
+        run: bandit -r src/ -c pyproject.toml
+      
+      - name: Run detect-secrets
+        run: detect-secrets scan --baseline .secrets.baseline
+
+  # ==================
+  # Unit Tests
+  # ==================
+  test-unit:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+      
+      - name: Run unit tests
+        run: |
+          pytest tests/unit/ \
+            --cov=src \
+            --cov-report=xml \
+            --cov-report=term-missing \
+            --cov-fail-under=80
+      
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          file: ./coverage.xml
+          flags: unittests
+
+  # ==================
+  # Integration Tests
+  # ==================
+  test-integration:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: taxi_api_test
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+      
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+      
+      - name: Run migrations
+        env:
+          DATABASE_URL: postgresql://test_user:test_password@localhost:5432/taxi_api_test
+        run: |
+          alembic upgrade head
+      
+      - name: Run integration tests
+        env:
+          DATABASE_URL: postgresql://test_user:test_password@localhost:5432/taxi_api_test
+          REDIS_URL: redis://localhost:6379/0
+        run: |
+          pytest tests/integration/ -v
+
+  # ==================
+  # E2E Tests
+  # ==================
+  test-e2e:
+    name: E2E Tests
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Build Docker images
+        run: |
+          docker-compose -f docker-compose.test.yml build
+      
+      - name: Run E2E tests
+        run: |
+          docker-compose -f docker-compose.test.yml up --abort-on-container-exit --exit-code-from api
+      
+      - name: Cleanup
+        if: always()
+        run: |
+          docker-compose -f docker-compose.test.yml down -v
+
+  # ==================
+  # Docker Build
+  # ==================
+  docker-build:
+    name: Build Docker Image
+    runs-on: ubuntu-latest
+    needs: [lint, test-unit, test-integration]
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Build image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: false
+          tags: taxi-api:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+```
+
+---
+
+### 11.3 GitHub Actions - Deploy Pipeline
+
+**`.github/workflows/deploy.yml`**
+
+```yaml
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+    tags:
+      - 'v*.*.*'
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  # ==================
+  # Build & Push Image
+  # ==================
+  build-and-push:
+    name: Build and Push Docker Image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    
+    outputs:
+      image-tag: ${{ steps.meta.outputs.tags }}
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix={{branch}}-
+      
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+  # ==================
+  # Deploy to Staging
+  # ==================
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    if: github.ref == 'refs/heads/develop'
+    environment:
+      name: staging
+      url: https://staging.taxi-api.yourdomain.com
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Deploy to staging server
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.STAGING_HOST }}
+          username: ${{ secrets.STAGING_USER }}
+          key: ${{ secrets.STAGING_SSH_KEY }}
+          script: |
+            cd /opt/taxi-api-staging
+            docker-compose pull
+            docker-compose up -d --no-build
+            docker-compose exec -T api alembic upgrade head
+      
+      - name: Run smoke tests
+        run: |
+          curl -f https://staging.taxi-api.yourdomain.com/health || exit 1
+      
+      - name: Notify deployment
+        uses: 8398a7/action-slack@v3
+        with:
+          status: ${{ job.status }}
+          text: 'Staging deployment completed'
+          webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+        if: always()
+
+  # ==================
+  # Deploy to Production
+  # ==================
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    if: startsWith(github.ref, 'refs/tags/v')
+    environment:
+      name: production
+      url: https://api.taxi.yourdomain.com
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Create backup
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.PROD_HOST }}
+          username: ${{ secrets.PROD_USER }}
+          key: ${{ secrets.PROD_SSH_KEY }}
+          script: |
+            cd /opt/taxi-api
+            ./scripts/backup.sh
+      
+      - name: Deploy to production
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.PROD_HOST }}
+          username: ${{ secrets.PROD_USER }}
+          key: ${{ secrets.PROD_SSH_KEY }}
+          script: |
+            cd /opt/taxi-api
+            export NEW_VERSION=${{ github.ref_name }}
+            docker-compose pull
+            docker-compose up -d --no-build
+            docker-compose exec -T api alembic upgrade head
+      
+      - name: Run smoke tests
+        run: |
+          sleep 10
+          ./scripts/smoke_tests.sh production
+      
+      - name: Rollback on failure
+        if: failure()
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.PROD_HOST }}
+          username: ${{ secrets.PROD_USER }}
+          key: ${{ secrets.PROD_SSH_KEY }}
+          script: |
+            cd /opt/taxi-api
+            ./scripts/rollback.sh
+      
+      - name: Notify deployment
+        uses: 8398a7/action-slack@v3
+        with:
+          status: ${{ job.status }}
+          text: 'Production deployment: ${{ github.ref_name }}'
+          webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+        if: always()
+```
+
+---
+
+### 11.4 Staging Environment
+
+**`docker-compose.staging.yml`**
+
+```yaml
+# Override for staging environment
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.staging.yml up -d
+
+version: '3.8'
+
+services:
+  db:
+    environment:
+      POSTGRES_DB: taxi_api_staging
+    volumes:
+      - postgres_data_staging:/var/lib/postgresql/data
+
+  api:
+    image: ghcr.io/ivantintore/taxi2:develop
+    environment:
+      ENVIRONMENT: staging
+      DEBUG: "True"
+      # Staging-specific settings
+      UBER_API_SANDBOX: "True"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.taxi-api-staging.rule=Host(`staging.taxi-api.yourdomain.com`)"
+      - "traefik.http.routers.taxi-api-staging.entrypoints=websecure"
+      - "traefik.http.routers.taxi-api-staging.tls.certresolver=letsencrypt"
+
+  celery-worker:
+    image: ghcr.io/ivantintore/taxi2:develop
+    environment:
+      ENVIRONMENT: staging
+
+  celery-beat:
+    image: ghcr.io/ivantintore/taxi2:develop
+    environment:
+      ENVIRONMENT: staging
+
+volumes:
+  postgres_data_staging:
+```
+
+---
+
+## 12. Testing & Quality Assurance
+
+### 12.1 TDD Workflow Completo (Paso a Paso)
+
+**Ciclo Red → Green → Refactor**
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    CICLO TDD COMPLETO                        │
+├─────────────────────────────────────────────────────────────┤
+│  1. RED: Escribe test que FALLA                             │
+│     - Define comportamiento esperado                         │
+│     - Test debe fallar (código no existe)                   │
+│                                                              │
+│  2. GREEN: Escribe MÍNIMO código para pasar                 │
+│     - Implementación simple                                  │
+│     - Solo lo necesario para pasar el test                  │
+│                                                              │
+│  3. REFACTOR: Mejora el código                              │
+│     - Clean code                                             │
+│     - SOLID principles                                       │
+│     - Tests siguen pasando                                   │
+│                                                              │
+│  4. REPETIR para siguiente funcionalidad                     │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Ejemplo Real: Crear Trip**
+
+**PASO 1: RED (Test que falla)**
+
+```python
+# tests/unit/domain/test_trip_entity.py
+
+import pytest
+from decimal import Decimal
+from datetime import datetime
+from uuid import uuid4
+
+from src.domain.entities.trip import Trip
+
+
+def test_trip_calculates_net_amount_correctly():
+    """
+    RED: Este test DEBE FALLAR porque Trip aún no existe.
+    
+    Definimos el comportamiento esperado:
+    - net_amount = gross_amount - commission - platform_fee
+    """
+    # Arrange
+    trip = Trip(
+        source="uber",
+        started_at=datetime.now(),
+        gross_amount=Decimal("25.00"),
+        commission=Decimal("5.00"),
+        platform_fee=Decimal("2.00"),
+        currency_code="EUR",
+        driver_id=uuid4(),
+        vehicle_id=uuid4()
+    )
+    
+    # Act
+    net = trip.net_amount
+    
+    # Assert
+    assert net == Decimal("18.00"), "Net should be 25 - 5 - 2 = 18"
+
+
+def test_trip_marks_as_duplicate():
+    """
+    RED: Test para funcionalidad de duplicados
+    """
+    trip = Trip(
+        source="freenow",
+        started_at=datetime.now(),
+        gross_amount=Decimal("20.00"),
+        currency_code="EUR",
+        driver_id=uuid4(),
+        vehicle_id=uuid4()
+    )
+    
+    canonical_id = uuid4()
+    
+    # Act
+    trip.mark_as_duplicate(canonical_id)
+    
+    # Assert
+    assert trip.is_canonical == False
+    assert trip.merged_into_trip_id == canonical_id
+```
+
+**Ejecutar test (DEBE FALLAR):**
+
+```bash
+$ pytest tests/unit/domain/test_trip_entity.py -v
+
+# Output esperado:
+# FAILED - ModuleNotFoundError: No module named 'src.domain.entities.trip'
+# ✓ Test falla como esperado (RED)
+```
+
+---
+
+**PASO 2: GREEN (Implementación mínima)**
+
+```python
+# src/domain/entities/trip.py
+
+from dataclasses import dataclass
+from decimal import Decimal
+from datetime import datetime
+from typing import Optional
+from uuid import UUID
+
+
+@dataclass
+class Trip:
+    """Entidad de dominio para Trip"""
+    
+    source: str
+    started_at: datetime
+    gross_amount: Decimal
+    currency_code: str
+    driver_id: UUID
+    vehicle_id: UUID
+    
+    commission: Decimal = Decimal("0.00")
+    platform_fee: Decimal = Decimal("0.00")
+    is_canonical: bool = True
+    merged_into_trip_id: Optional[UUID] = None
+    
+    @property
+    def net_amount(self) -> Decimal:
+        """Calcula net amount"""
+        return self.gross_amount - self.commission - self.platform_fee
+    
+    def mark_as_duplicate(self, canonical_trip_id: UUID) -> None:
+        """Marca trip como duplicado"""
+        self.is_canonical = False
+        self.merged_into_trip_id = canonical_trip_id
+```
+
+**Ejecutar test (DEBE PASAR):**
+
+```bash
+$ pytest tests/unit/domain/test_trip_entity.py -v
+
+# Output esperado:
+# test_trip_calculates_net_amount_correctly PASSED
+# test_trip_marks_as_duplicate PASSED
+# ✓ Tests pasan (GREEN)
+```
+
+---
+
+**PASO 3: REFACTOR (Mejorar código)**
+
+```python
+# src/domain/entities/trip.py (refactored)
+
+from dataclasses import dataclass, field
+from decimal import Decimal
+from datetime import datetime
+from typing import Optional, Dict
+from uuid import UUID, uuid4
+
+
+@dataclass
+class Trip:
+    """
+    Entidad de dominio para Trip (Viaje).
+    
+    Representa la lógica de negocio pura sin dependencias de DB.
+    Sigue principios SOLID:
+    - Single Responsibility: Solo lógica de viajes
+    - Open/Closed: Extensible sin modificar
+    """
+    
+    # Required fields
+    source: str
+    started_at: datetime
+    gross_amount: Decimal
+    currency_code: str
+    driver_id: UUID
+    vehicle_id: UUID
+    
+    # Optional fields with defaults
+    id: UUID = field(default_factory=uuid4)
+    commission: Decimal = Decimal("0.00")
+    platform_fee: Decimal = Decimal("0.00")
+    is_canonical: bool = True
+    merged_into_trip_id: Optional[UUID] = None
+    
+    # Validation
+    def __post_init__(self):
+        if self.gross_amount < 0:
+            raise ValueError("Gross amount cannot be negative")
+        if self.commission < 0:
+            raise ValueError("Commission cannot be negative")
+    
+    @property
+    def net_amount(self) -> Decimal:
+        """
+        Calcula el monto neto después de comisiones.
+        
+        Formula: gross_amount - commission - platform_fee
+        """
+        return self.gross_amount - self.commission - self.platform_fee
+    
+    @property
+    def total_fees(self) -> Decimal:
+        """Total de fees pagados a plataformas"""
+        return self.commission + self.platform_fee
+    
+    def mark_as_duplicate(self, canonical_trip_id: UUID) -> None:
+        """
+        Marca este trip como duplicado de otro canónico.
+        
+        Args:
+            canonical_trip_id: ID del trip canónico
+        
+        Raises:
+            ValueError: Si se intenta marcar como duplicado de sí mismo
+        """
+        if canonical_trip_id == self.id:
+            raise ValueError("Cannot mark trip as duplicate of itself")
+        
+        self.is_canonical = False
+        self.merged_into_trip_id = canonical_trip_id
+```
+
+**Añadir tests para validaciones:**
+
+```python
+# tests/unit/domain/test_trip_entity.py (extended)
+
+def test_trip_raises_error_on_negative_amount():
+    """Test validación de monto negativo"""
+    with pytest.raises(ValueError, match="Gross amount cannot be negative"):
+        Trip(
+            source="uber",
+            started_at=datetime.now(),
+            gross_amount=Decimal("-10.00"),  # ❌ Negativo
+            currency_code="EUR",
+            driver_id=uuid4(),
+            vehicle_id=uuid4()
+        )
+
+
+def test_trip_cannot_mark_as_duplicate_of_itself():
+    """Test prevención de auto-duplicado"""
+    trip = Trip(
+        source="uber",
+        started_at=datetime.now(),
+        gross_amount=Decimal("20.00"),
+        currency_code="EUR",
+        driver_id=uuid4(),
+        vehicle_id=uuid4()
+    )
+    
+    with pytest.raises(ValueError, match="Cannot mark trip as duplicate of itself"):
+        trip.mark_as_duplicate(trip.id)
+```
+
+**Ejecutar tests (TODOS PASAN):**
+
+```bash
+$ pytest tests/unit/domain/test_trip_entity.py -v --cov=src/domain/entities/trip
+
+# Output:
+# test_trip_calculates_net_amount_correctly PASSED
+# test_trip_marks_as_duplicate PASSED
+# test_trip_raises_error_on_negative_amount PASSED
+# test_trip_cannot_mark_as_duplicate_of_itself PASSED
+# 
+# Coverage: 100%
+# ✓ Refactor completo con tests pasando
+```
+
+---
+
+### 12.2 Test Examples por Capa
+
+**Unit Tests (Domain Layer)**
+
+```python
+# tests/unit/domain/value_objects/test_money.py
+
+from decimal import Decimal
+import pytest
+
+from src.domain.value_objects.money import Money
+
+
+class TestMoney:
+    """Tests para Value Object Money"""
+    
+    def test_money_creation(self):
+        money = Money(amount=Decimal("100.50"), currency="EUR")
+        assert money.amount == Decimal("100.50")
+        assert money.currency == "EUR"
+    
+    def test_money_addition_same_currency(self):
+        m1 = Money(Decimal("10.00"), "EUR")
+        m2 = Money(Decimal("5.50"), "EUR")
+        
+        result = m1 + m2
+        
+        assert result.amount == Decimal("15.50")
+        assert result.currency == "EUR"
+    
+    def test_money_addition_different_currency_raises_error(self):
+        m1 = Money(Decimal("10.00"), "EUR")
+        m2 = Money(Decimal("5.00"), "USD")
+        
+        with pytest.raises(ValueError, match="Cannot add different currencies"):
+            m1 + m2
+    
+    def test_money_is_immutable(self):
+        money = Money(Decimal("100.00"), "EUR")
+        
+        with pytest.raises(AttributeError):
+            money.amount = Decimal("200.00")  # ❌ No se puede modificar
+```
+
+**Integration Tests (Repository Layer)**
+
+```python
+# tests/integration/test_trip_repository.py
+
+import pytest
+from decimal import Decimal
+from datetime import datetime
+from uuid import uuid4
+
+from src.infrastructure.database.repositories.sqlalchemy_trip_repository import SQLAlchemyTripRepository
+from src.domain.entities.trip import Trip
+
+
+@pytest.fixture
+def trip_repository(db_session):
+    """Fixture que provee repository con DB real"""
+    return SQLAlchemyTripRepository(db_session)
+
+
+class TestTripRepository:
+    """Integration tests con PostgreSQL real"""
+    
+    def test_save_and_retrieve_trip(self, trip_repository, driver_fixture, vehicle_fixture):
+        """Test completo de persistencia"""
+        # Arrange
+        trip = Trip(
+            source="uber",
+            started_at=datetime.now(),
+            gross_amount=Decimal("25.00"),
+            currency_code="EUR",
+            driver_id=driver_fixture.id,
+            vehicle_id=vehicle_fixture.id
+        )
+        
+        # Act - Save
+        saved_trip = trip_repository.save(trip)
+        
+        # Assert - Save
+        assert saved_trip.id is not None
+        
+        # Act - Retrieve
+        retrieved_trip = trip_repository.get_by_id(saved_trip.id)
+        
+        # Assert - Retrieve
+        assert retrieved_trip is not None
+        assert retrieved_trip.gross_amount == Decimal("25.00")
+        assert retrieved_trip.source == "uber"
+    
+    def test_get_by_driver_filters_correctly(self, trip_repository, driver_fixture, vehicle_fixture):
+        """Test de query filtering"""
+        # Arrange - Create 3 trips for same driver
+        for i in range(3):
+            trip = Trip(
+                source="uber",
+                started_at=datetime.now(),
+                gross_amount=Decimal(f"{10 + i}.00"),
+                currency_code="EUR",
+                driver_id=driver_fixture.id,
+                vehicle_id=vehicle_fixture.id
+            )
+            trip_repository.save(trip)
+        
+        # Act
+        trips = trip_repository.get_by_driver(driver_fixture.id)
+        
+        # Assert
+        assert len(trips) == 3
+        assert all(t.driver_id == driver_fixture.id for t in trips)
+```
+
+**E2E Tests (API Layer)**
+
+```python
+# tests/e2e/test_api_trips.py
+
+import pytest
+from fastapi.testclient import TestClient
+from decimal import Decimal
+from datetime import datetime
+
+from src.main import app
+
+
+@pytest.fixture
+def client():
+    """FastAPI test client"""
+    return TestClient(app)
+
+
+@pytest.fixture
+def auth_headers(client):
+    """Headers con JWT token válido"""
+    response = client.post("/auth/login", json={
+        "email": "ivan@test.com",
+        "password": "test123"
+    })
+    token = response.json()["access_token"]
+    return {"Authorization": f"Bearer {token}"}
+
+
+class TestTripsAPI:
+    """E2E tests del API de trips"""
+    
+    def test_create_trip_returns_201(self, client, auth_headers):
+        """Test crear trip via API"""
+        # Arrange
+        trip_data = {
+            "source": "street",
+            "started_at": datetime.now().isoformat(),
+            "gross_amount": "25.00",
+            "currency_code": "EUR",
+            "driver_id": str(uuid4()),
+            "vehicle_id": str(uuid4())
+        }
+        
+        # Act
+        response = client.post(
+            "/api/v1/trips",
+            json=trip_data,
+            headers=auth_headers
+        )
+        
+        # Assert
+        assert response.status_code == 201
+        data = response.json()
+        assert data["source"] == "street"
+        assert data["gross_amount"] == "25.00"
+        assert "id" in data
+    
+    def test_list_trips_with_pagination(self, client, auth_headers):
+        """Test paginación de trips"""
+        # Act
+        response = client.get(
+            "/api/v1/trips?skip=0&limit=10",
+            headers=auth_headers
+        )
+        
+        # Assert
+        assert response.status_code == 200
+        data = response.json()
+        assert "data" in data
+        assert "total" in data
+        assert len(data["data"]) <= 10
+    
+    def test_get_trip_by_id_not_found_returns_404(self, client, auth_headers):
+        """Test trip no encontrado"""
+        # Act
+        fake_id = str(uuid4())
+        response = client.get(
+            f"/api/v1/trips/{fake_id}",
+            headers=auth_headers
+        )
+        
+        # Assert
+        assert response.status_code == 404
+```
+
+---
+
+### 12.3 Smoke Tests (Post-Deploy Validation)
+
+**`scripts/smoke_tests.sh`**
+
+```bash
+#!/bin/bash
+
+# Smoke Tests - Verificación rápida post-deploy
+# Usage: ./scripts/smoke_tests.sh [production|staging]
+
+set -e
+
+ENVIRONMENT=${1:-staging}
+
+case $ENVIRONMENT in
+  production)
+    BASE_URL="https://api.taxi.yourdomain.com"
+    ;;
+  staging)
+    BASE_URL="https://staging.taxi-api.yourdomain.com"
+    ;;
+  *)
+    echo "Unknown environment: $ENVIRONMENT"
+    exit 1
+    ;;
+esac
+
+echo "🔍 Running smoke tests against $ENVIRONMENT ($BASE_URL)"
+echo "=================================================="
+
+# Test 1: Health check
+echo "✓ Test 1: Health endpoint"
+HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$BASE_URL/health")
+if [ "$HTTP_CODE" != "200" ]; then
+  echo "❌ Health check failed (HTTP $HTTP_CODE)"
+  exit 1
+fi
+echo "  ✅ Health check OK"
+
+# Test 2: Database connectivity
+echo "✓ Test 2: Database connection"
+HEALTH_RESPONSE=$(curl -s "$BASE_URL/health")
+DB_STATUS=$(echo $HEALTH_RESPONSE | jq -r '.database')
+if [ "$DB_STATUS" != "ok" ]; then
+  echo "❌ Database not connected"
+  exit 1
+fi
+echo "  ✅ Database OK"
+
+# Test 3: Redis connectivity
+echo "✓ Test 3: Redis connection"
+REDIS_STATUS=$(echo $HEALTH_RESPONSE | jq -r '.redis')
+if [ "$REDIS_STATUS" != "ok" ]; then
+  echo "❌ Redis not connected"
+  exit 1
+fi
+echo "  ✅ Redis OK"
+
+# Test 4: API authentication
+echo "✓ Test 4: Authentication"
+AUTH_RESPONSE=$(curl -s -w "%{http_code}" -o /dev/null "$BASE_URL/api/v1/trips" -H "Authorization: Bearer invalid")
+if [ "$AUTH_RESPONSE" != "401" ]; then
+  echo "❌ Authentication not working properly"
+  exit 1
+fi
+echo "  ✅ Authentication OK"
+
+# Test 5: Celery workers
+echo "✓ Test 5: Celery workers"
+if [ "$ENVIRONMENT" = "production" ]; then
+  ssh $PROD_HOST "docker ps | grep celery-worker | grep -q Up"
+  if [ $? -ne 0 ]; then
+    echo "❌ Celery workers not running"
+    exit 1
+  fi
+fi
+echo "  ✅ Celery OK"
+
+# Test 6: Metrics endpoint (if Prometheus enabled)
+echo "✓ Test 6: Metrics endpoint"
+METRICS_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$BASE_URL/metrics")
+if [ "$METRICS_CODE" = "200" ]; then
+  echo "  ✅ Metrics OK"
+else
+  echo "  ⚠️  Metrics not available (optional)"
+fi
+
+echo ""
+echo "=================================================="
+echo "✅ All smoke tests passed for $ENVIRONMENT"
+echo "Deploy validated successfully!"
+```
+
+---
+
+## 13. Production Operations
+
+### 13.1 Context Verification Checklist
+
+**⚠️ SIEMPRE ejecutar ANTES de modificar código o hacer deploy**
+
+```bash
+#!/bin/bash
+# scripts/verify_context.sh
+
+echo "🔍 CONTEXT VERIFICATION CHECKLIST"
+echo "=================================="
+
+# 1. Verify project structure
+echo ""
+echo "1️⃣  Project Structure:"
+ls -la
+git status
+
+# 2. Verify what's running
+echo ""
+echo "2️⃣  Running Containers:"
+docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+
+# 3. Verify architecture docs
+echo ""
+echo "3️⃣  Architecture Documentation:"
+if [ -f "README.md" ]; then
+  echo "  ✅ README.md exists"
+else
+  echo "  ❌ README.md missing!"
+fi
+
+if [ -f "TAXI_API_SPEC.md" ]; then
+  echo "  ✅ TAXI_API_SPEC.md exists"
+else
+  echo "  ❌ TAXI_API_SPEC.md missing!"
+fi
+
+# 4. Verify current branch
+echo ""
+echo "4️⃣  Git Branch:"
+git branch --show-current
+
+# 5. Verify environment
+echo ""
+echo "5️⃣  Environment Variables:"
+if [ -f ".env" ]; then
+  echo "  ✅ .env file exists"
+  echo "  ENVIRONMENT=$(grep ENVIRONMENT .env | cut -d '=' -f2)"
+else
+  echo "  ❌ .env file missing!"
+fi
+
+echo ""
+echo "=================================="
+echo "✅ Context verification complete"
+echo ""
+echo "⚠️  CRITICAL QUESTIONS BEFORE PROCEEDING:"
+echo "  1. Am I in the correct directory?"
+echo "  2. Am I on the correct branch?"
+echo "  3. Are the right containers running?"
+echo "  4. Do I understand the current architecture?"
+echo ""
+read -p "Continue? (y/n) " -n 1 -r
+echo
+if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+  echo "❌ Aborted"
+  exit 1
+fi
+```
+
+**Uso:**
+
+```bash
+# Antes de CUALQUIER modificación
+./scripts/verify_context.sh
+
+# Manual checklist:
+# ✅ ¿Estoy en el directorio correcto?
+# ✅ ¿Estoy en la branch correcta?
+# ✅ ¿Los containers correctos están corriendo?
+# ✅ ¿Entiendo la arquitectura actual?
+# ✅ ¿He leído el README y TAXI_API_SPEC.md?
+```
+
+---
+
+### 13.2 Rollback Procedures
+
+**`scripts/rollback.sh`**
+
+```bash
+#!/bin/bash
+
+# Rollback Script - Revertir a versión anterior
+# Usage: ./scripts/rollback.sh [version]
+
+set -e
+
+BACKUP_DIR="/opt/taxi-api/backups"
+ROLLBACK_VERSION=${1:-previous}
+
+echo "🔙 TAXI API ROLLBACK PROCEDURE"
+echo "=================================="
+echo "Target version: $ROLLBACK_VERSION"
+echo ""
+
+# 1. Verificar backup existe
+echo "1️⃣  Checking backup availability..."
+if [ "$ROLLBACK_VERSION" = "previous" ]; then
+  BACKUP_FILE=$(ls -t $BACKUP_DIR/*.tar.gz | head -1)
+else
+  BACKUP_FILE="$BACKUP_DIR/backup-$ROLLBACK_VERSION.tar.gz"
+fi
+
+if [ ! -f "$BACKUP_FILE" ]; then
+  echo "❌ Backup not found: $BACKUP_FILE"
+  exit 1
+fi
+echo "  ✅ Backup found: $BACKUP_FILE"
+
+# 2. Crear snapshot del estado actual (por si acaso)
+echo ""
+echo "2️⃣  Creating safety snapshot..."
+./scripts/backup.sh "pre-rollback-$(date +%Y%m%d_%H%M%S)"
+
+# 3. Detener servicios
+echo ""
+echo "3️⃣  Stopping services..."
+docker-compose down
+
+# 4. Restaurar desde backup
+echo ""
+echo "4️⃣  Restoring from backup..."
+tar -xzf $BACKUP_FILE -C /opt/taxi-api/
+
+# 5. Revertir base de datos
+echo ""
+echo "5️⃣  Rolling back database..."
+docker-compose up -d db
+sleep 5
+
+# Obtener versión de migration del backup
+MIGRATION_VERSION=$(cat /opt/taxi-api/.migration_version)
+docker-compose exec -T db psql -U taxi_admin -d taxi_api -c "
+  DELETE FROM alembic_version;
+  INSERT INTO alembic_version VALUES ('$MIGRATION_VERSION');
+"
+
+# 6. Levantar servicios con versión anterior
+echo ""
+echo "6️⃣  Starting services with previous version..."
+docker-compose up -d
+
+# 7. Esperar que los servicios estén healthy
+echo ""
+echo "7️⃣  Waiting for services to be healthy..."
+sleep 10
+
+# 8. Ejecutar smoke tests
+echo ""
+echo "8️⃣  Running smoke tests..."
+./scripts/smoke_tests.sh production
+
+echo ""
+echo "=================================="
+echo "✅ Rollback completed successfully"
+echo "Previous version restored from: $BACKUP_FILE"
+echo ""
+echo "⚠️  NEXT STEPS:"
+echo "  1. Verify application is working: https://api.taxi.yourdomain.com/health"
+echo "  2. Check logs: docker-compose logs -f api"
+echo "  3. Notify team of rollback"
+echo "  4. Investigate root cause of issue"
+```
+
+**`scripts/backup.sh`**
+
+```bash
+#!/bin/bash
+
+# Backup Script - Crear backup completo
+# Usage: ./scripts/backup.sh [backup-name]
+
+set -e
+
+BACKUP_DIR="/opt/taxi-api/backups"
+BACKUP_NAME=${1:-backup-$(date +%Y%m%d_%H%M%S)}
+BACKUP_FILE="$BACKUP_DIR/$BACKUP_NAME.tar.gz"
+
+mkdir -p $BACKUP_DIR
+
+echo "💾 Creating backup: $BACKUP_NAME"
+echo "=================================="
+
+# 1. Backup base de datos
+echo "1️⃣  Backing up database..."
+docker-compose exec -T db pg_dump -U taxi_admin taxi_api > $BACKUP_DIR/db_dump.sql
+
+# 2. Backup archivos de configuración
+echo "2️⃣  Backing up configuration..."
+cp .env $BACKUP_DIR/.env.backup
+cp docker-compose.yml $BACKUP_DIR/docker-compose.yml.backup
+
+# 3. Guardar versión de migration actual
+echo "3️⃣  Saving migration version..."
+docker-compose exec -T db psql -U taxi_admin -d taxi_api -t -c "SELECT version_num FROM alembic_version;" | tr -d ' ' > $BACKUP_DIR/.migration_version
+
+# 4. Comprimir todo
+echo "4️⃣  Compressing backup..."
+tar -czf $BACKUP_FILE -C $BACKUP_DIR db_dump.sql .env.backup docker-compose.yml.backup .migration_version
+
+# 5. Limpiar archivos temporales
+rm $BACKUP_DIR/db_dump.sql $BACKUP_DIR/.env.backup $BACKUP_DIR/docker-compose.yml.backup $BACKUP_DIR/.migration_version
+
+# 6. Limpiar backups antiguos (mantener últimos 10)
+echo "5️⃣  Cleaning old backups (keeping last 10)..."
+ls -t $BACKUP_DIR/*.tar.gz | tail -n +11 | xargs -r rm
+
+echo ""
+echo "✅ Backup created: $BACKUP_FILE"
+echo "Size: $(du -h $BACKUP_FILE | cut -f1)"
+```
+
+---
+
+### 13.3 Incident Response Playbook
+
+**`INCIDENT_RESPONSE.md`**
+
+```markdown
+# 🚨 INCIDENT RESPONSE PLAYBOOK
+
+## Severidad de Incidentes
+
+| Nivel | Descripción | Tiempo Respuesta | Escalación |
+|-------|-------------|------------------|------------|
+| **P0 - CRITICAL** | Sistema completamente caído | Inmediato | CEO + CTO |
+| **P1 - HIGH** | Funcionalidad crítica afectada | < 30 min | Tech Lead |
+| **P2 - MEDIUM** | Funcionalidad no crítica afectada | < 2 horas | On-call dev |
+| **P3 - LOW** | Issue menor, workaround disponible | < 24 horas | Backlog |
+
+---
+
+## P0 - CRITICAL: Sistema Caído
+
+### Síntomas:
+- API no responde (500 errors)
+- Base de datos no accesible
+- Celery workers detenidos
+- Múltiples alertas en Grafana
+
+### Procedimiento:
+
+1. **COMUNICAR** (0-2 min)
+   ```
+   - Slack: #incidents "🚨 P0: API down, investigating"
+   - Telegram: Notificar a Iván/Elena
+   ```
+
+2. **DIAGNÓSTICO RÁPIDO** (2-5 min)
+   ```bash
+   # Check services
+   docker ps
+   docker-compose logs --tail=100 api
+   
+   # Check database
+   docker-compose exec db pg_isready
+   
+   # Check disk space
+   df -h
+   
+   # Check memory
+   free -h
+   ```
+
+3. **ACCIONES INMEDIATAS**
+
+   **Opción A: Restart rápido** (si es intermitente)
+   ```bash
+   docker-compose restart api
+   ```
+
+   **Opción B: Rollback** (si fue causado por deploy reciente)
+   ```bash
+   ./scripts/rollback.sh
+   ```
+
+   **Opción C: Scale down** (si es sobrecarga)
+   ```bash
+   # Desactivar Celery beat temporalmente
+   docker-compose stop celery-beat
+   ```
+
+4. **VALIDACIÓN** (10-15 min)
+   ```bash
+   ./scripts/smoke_tests.sh production
+   curl https://api.taxi.yourdomain.com/health
+   ```
+
+5. **POST-MORTEM** (24h después)
+   - Documentar causa raíz
+   - Implementar prevención
+   - Actualizar runbook
+
+---
+
+## P1 - HIGH: Sync Failing
+
+### Síntomas:
+- Alertas: "SyncFailureRate > 5%"
+- Dashboard sin datos recientes
+- Logs de error en Celery
+
+### Procedimiento:
+
+1. **Identificar fuente afectada**
+   ```bash
+   docker-compose logs celery-worker | grep ERROR
+   # ¿Es Uber, FreeNow o Prima?
+   ```
+
+2. **Verificar credenciales**
+   ```bash
+   # Check OAuth tokens no expirados
+   docker-compose exec api python scripts/check_tokens.py
+   ```
+
+3. **Trigger manual si falla automático**
+   ```bash
+   # Via API
+   curl -X POST https://api.taxi.yourdomain.com/api/v1/sync/trigger/uber \
+     -H "Authorization: Bearer $ADMIN_TOKEN"
+   ```
+
+4. **Si persiste: Degradar gracefully**
+   - Notificar a conductores que deben subir CSV manual
+   - Activar proceso manual documentado en Sección 2.2/2.3
+
+---
+
+## P2 - MEDIUM: High Dedup Queue
+
+### Síntomas:
+- Alerta: "HighDedupReviewQueue > 50"
+- Dashboard muestra muchos duplicados pendientes
+
+### Procedimiento:
+
+1. **Revisar casos manualmente**
+   ```
+   https://dashboard.taxi.yourdomain.com/admin/dedup-review
+   ```
+
+2. **Ajustar thresholds si hay patrón**
+   ```python
+   # En config.py
+   DEDUP_CONFIG = {
+       "time_window_seconds": 180,  # Aumentar de 120 a 180
+       "amount_tolerance_pct": 0.15  # Aumentar tolerancia
+   }
+   ```
+
+3. **Re-procesar con nuevos thresholds**
+
+---
+
+## Contactos de Escalación
+
+| Rol | Nombre | Teléfono | Email | Horario |
+|-----|--------|----------|-------|---------|
+| **On-call Primary** | Iván Tintoré | +34 XXX XXX XXX | ivan@... | 24/7 |
+| **On-call Secondary** | [Developer] | ... | ... | Business hours |
+| **Database Expert** | [DBA] | ... | ... | On-demand |
+
+---
+
+## Comandos Útiles
+
+### Logs
+```bash
+# API logs
+docker-compose logs -f --tail=100 api
+
+# Celery logs
+docker-compose logs -f --tail=100 celery-worker
+
+# Database logs
+docker-compose logs -f --tail=100 db
+
+# Todos los errores últimos 30min
+docker-compose logs --since 30m | grep ERROR
+```
+
+### Database
+```bash
+# Connect to DB
+docker-compose exec db psql -U taxi_admin -d taxi_api
+
+# Check connections
+SELECT count(*) FROM pg_stat_activity;
+
+# Kill long queries
+SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE state = 'active' AND now() - query_start > interval '5 minutes';
+```
+
+### Performance
+```bash
+# Check container resources
+docker stats
+
+# Check API response time
+time curl https://api.taxi.yourdomain.com/health
+
+# Check Celery queue size
+docker-compose exec redis redis-cli LLEN celery
+```
+```
+
+---
+
+### 13.4 Debug Playbook
+
+**Problema Común 1: API lento**
+
+```bash
+# 1. Check container resources
+docker stats taxi-api
+
+# 2. Check database connections
+docker-compose exec db psql -U taxi_admin -d taxi_api -c "
+  SELECT count(*), state 
+  FROM pg_stat_activity 
+  GROUP BY state;"
+
+# 3. Check slow queries
+docker-compose exec db psql -U taxi_admin -d taxi_api -c "
+  SELECT pid, now() - pg_stat_activity.query_start AS duration, query 
+  FROM pg_stat_activity 
+  WHERE state = 'active' AND now() - pg_stat_activity.query_start > interval '5 seconds';"
+
+# 4. Enable query logging temporarily
+docker-compose exec db psql -U taxi_admin -d taxi_api -c "
+  ALTER SYSTEM SET log_min_duration_statement = 1000;  -- Log queries > 1s
+  SELECT pg_reload_conf();"
+
+# 5. Profile with py-spy (si Python es el cuello de botella)
+docker-compose exec api pip install py-spy
+docker-compose exec api py-spy top --pid 1
+```
+
+**Problema Común 2: Celery tasks no ejecutan**
+
+```bash
+# 1. Check worker está corriendo
+docker ps | grep celery-worker
+
+# 2. Check logs
+docker-compose logs celery-worker --tail=50
+
+# 3. Check Redis connection
+docker-compose exec redis redis-cli ping
+
+# 4. Check queue size
+docker-compose exec redis redis-cli LLEN celery
+
+# 5. Purge queue si está bloqueada
+docker-compose exec redis redis-cli FLUSHDB
+
+# 6. Restart worker
+docker-compose restart celery-worker
+```
+
+**Problema Común 3: Database connection pool exhausted**
+
+```bash
+# 1. Ver conexiones activas
+docker-compose exec db psql -U taxi_admin -d taxi_api -c "
+  SELECT count(*), application_name 
+  FROM pg_stat_activity 
+  GROUP BY application_name;"
+
+# 2. Aumentar pool size temporalmente
+# En src/infrastructure/database/connection.py:
+# pool_size=20  (en vez de 10)
+# max_overflow=40  (en vez de 20)
+
+# 3. Restart API
+docker-compose restart api
+```
+
+---
+
 ## 📎 Referencias
 
 - [Uber Driver API](https://developer.uber.com/docs/drivers/introduction)
@@ -3467,3 +5056,4 @@ def test_unauthorized_access_returns_401():
 
 > **Documento generado por Claude para Ivan Tintoré**
 > **27 Enero 2026**
+> **Versión: 2.0 - Production Ready**
