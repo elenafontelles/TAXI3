@@ -1774,73 +1774,1602 @@ def normalize_timestamp(source_timestamp: str, source_timezone: str = 'Europe/Ma
 
 ---
 
-## 9. Estructura del Proyecto
+## 9. Infraestructura y Deployment
+
+### 9.1 Docker Setup
+
+#### 9.1.1 ¿Por qué NO usar venv dentro de Docker?
+
+**❌ ANTIPATRÓN: venv dentro de Docker**
+
+```dockerfile
+# ❌ MAL - No hacer esto
+FROM python:3.11
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+COPY requirements.txt .
+RUN pip install -r requirements.txt
+```
+
+**Problemas:**
+1. **Redundante**: Docker ya proporciona aislamiento completo
+2. **Capas extra**: Aumenta el tamaño de la imagen innecesariamente
+3. **Complejidad**: PATH y activación manual
+4. **No es idiomático**: Va contra las mejores prácticas de Docker
+
+**✅ CORRECTO: Instalación directa en imagen**
+
+```dockerfile
+# ✅ BIEN - Instalación directa
+FROM python:3.11-slim
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+```
+
+**Por qué funciona:**
+- Cada container es un entorno aislado (como un venv)
+- Las dependencias solo existen dentro del container
+- Multi-stage builds separan build-time de runtime
+- Layers caching optimiza rebuilds
+
+---
+
+#### 9.1.2 Dockerfile Multi-Stage (Producción)
+
+```dockerfile
+# ================================
+# Stage 1: Builder (dependencias)
+# ================================
+FROM python:3.11-slim AS builder
+
+WORKDIR /build
+
+# Instalar dependencias de compilación
+RUN apt-get update && apt-get install -y \
+    gcc \
+    postgresql-client \
+    libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copiar solo requirements primero (cache layer)
+COPY requirements.txt .
+
+# Instalar dependencias en /install
+RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
+
+# ================================
+# Stage 2: Runtime (producción)
+# ================================
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Crear usuario no-root (seguridad)
+RUN groupadd -r taxi && useradd -r -g taxi taxi
+
+# Instalar solo runtime dependencies
+RUN apt-get update && apt-get install -y \
+    libpq5 \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copiar dependencias instaladas desde builder
+COPY --from=builder /install /usr/local
+
+# Copiar código fuente
+COPY --chown=taxi:taxi src/ /app/src/
+COPY --chown=taxi:taxi tasks/ /app/tasks/
+COPY --chown=taxi:taxi migrations/ /app/migrations/
+COPY --chown=taxi:taxi scripts/ /app/scripts/
+
+# Variables de entorno
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONPATH=/app
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
+
+# Cambiar a usuario no-root
+USER taxi
+
+# Exponer puerto
+EXPOSE 8000
+
+# Comando por defecto (puede ser sobreescrito en docker-compose)
+CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]
+```
+
+---
+
+#### 9.1.3 docker-compose.yml Completo
+
+```yaml
+version: '3.8'
+
+services:
+  # ==================
+  # Base de Datos
+  # ==================
+  db:
+    image: postgres:15-alpine
+    container_name: taxi-api-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:-taxi_api}
+      POSTGRES_USER: ${DB_USER:-taxi_admin}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Database password required}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=es_ES.UTF-8"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init_db.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-taxi_admin}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    # NO exponer puerto en producción (solo red interna)
+    # ports:
+    #   - "5432:5432"  # Solo para desarrollo local
+
+  # ==================
+  # Redis (Celery broker)
+  # ==================
+  redis:
+    image: redis:7-alpine
+    container_name: taxi-api-redis
+    restart: unless-stopped
+    command: redis-server --requirepass ${REDIS_PASSWORD:?Redis password required}
+    volumes:
+      - redis_data:/data
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ==================
+  # API FastAPI
+  # ==================
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: taxi-api
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@db:5432/${DB_NAME}
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      ENVIRONMENT: ${ENVIRONMENT:-production}
+    ports:
+      - "${API_PORT:-8000}:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - internal
+      - public
+    volumes:
+      # Solo en desarrollo - hot reload
+      - ./src:/app/src:ro
+      - ./imports:/app/imports  # Para CSVs de FreeNow/Prima
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # ==================
+  # Celery Worker (sincronización)
+  # ==================
+  celery-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: taxi-api-celery-worker
+    restart: unless-stopped
+    command: celery -A tasks.celery_app worker --loglevel=info --concurrency=2
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@db:5432/${DB_NAME}
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      C_FORCE_ROOT: "true"  # Solo si es necesario
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - internal
+    volumes:
+      - ./imports:/app/imports  # Acceso a CSVs
+
+  # ==================
+  # Celery Beat (scheduler)
+  # ==================
+  celery-beat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: taxi-api-celery-beat
+    restart: unless-stopped
+    command: celery -A tasks.celery_app beat --loglevel=info
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@db:5432/${DB_NAME}
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+    depends_on:
+      - redis
+      - celery-worker
+    networks:
+      - internal
+    volumes:
+      - celery_beat_data:/app/celerybeat-schedule
+
+  # ==================
+  # Prometheus (opcional - observability)
+  # ==================
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: taxi-api-prometheus
+    restart: unless-stopped
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=30d'
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+    networks:
+      - internal
+    profiles:
+      - monitoring
+
+  # ==================
+  # Grafana (opcional - dashboards)
+  # ==================
+  grafana:
+    image: grafana/grafana:latest
+    container_name: taxi-api-grafana
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+      GF_INSTALL_PLUGINS: redis-datasource
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana-dashboards:/etc/grafana/provisioning/dashboards:ro
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+    networks:
+      - internal
+    profiles:
+      - monitoring
+
+# ==================
+# Volúmenes
+# ==================
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  celery_beat_data:
+    driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
+
+# ==================
+# Redes
+# ==================
+networks:
+  internal:
+    driver: bridge
+    internal: true  # No acceso a internet (seguridad)
+  public:
+    driver: bridge
+```
+
+---
+
+#### 9.1.4 .env.example
+
+```bash
+# ==================
+# Application
+# ==================
+ENVIRONMENT=production
+DEBUG=False
+SECRET_KEY=your-secret-key-here-change-in-production
+
+# ==================
+# Database
+# ==================
+DB_NAME=taxi_api
+DB_USER=taxi_admin
+DB_PASSWORD=strong-password-here
+DB_HOST=db
+DB_PORT=5432
+
+# ==================
+# Redis
+# ==================
+REDIS_PASSWORD=redis-strong-password
+REDIS_HOST=redis
+REDIS_PORT=6379
+
+# ==================
+# API
+# ==================
+API_PORT=8000
+CORS_ORIGINS=http://localhost:3000,https://yourdomain.com
+
+# ==================
+# OAuth (Uber)
+# ==================
+UBER_CLIENT_ID=your-uber-client-id
+UBER_CLIENT_SECRET=your-uber-client-secret
+UBER_REDIRECT_URI=https://yourdomain.com/auth/uber/callback
+
+# ==================
+# Telegram (Alertas)
+# ==================
+TELEGRAM_BOT_TOKEN=your-bot-token
+TELEGRAM_ADMIN_CHAT_ID=your-chat-id
+
+# ==================
+# Monitoring (opcional)
+# ==================
+GRAFANA_PASSWORD=admin
+```
+
+---
+
+#### 9.1.5 .dockerignore
+
+```
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+
+# Virtual environments (no necesarios en Docker)
+venv/
+env/
+ENV/
+.venv
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Environment
+.env
+.env.local
+
+# Tests
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Database
+*.db
+*.sqlite3
+
+# Logs
+logs/
+*.log
+
+# Documentation
+docs/
+*.md
+!README.md
+
+# Frontend (si se buildea separado)
+frontend/node_modules/
+frontend/build/
+
+# Temporary
+tmp/
+temp/
+*.tmp
+
+# OS
+.DS_Store
+Thumbs.db
+```
+
+---
+
+#### 9.1.6 Comandos Docker Útiles
+
+```bash
+# Desarrollo local
+docker-compose up -d                    # Levantar servicios
+docker-compose logs -f api              # Ver logs de API
+docker-compose exec api bash            # Shell dentro del container
+docker-compose down                     # Parar servicios
+
+# Producción
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+
+# Con monitoring
+docker-compose --profile monitoring up -d
+
+# Migrations
+docker-compose exec api alembic upgrade head
+docker-compose exec api alembic revision --autogenerate -m "Add table"
+
+# Acceso a DB
+docker-compose exec db psql -U taxi_admin -d taxi_api
+
+# Limpieza
+docker-compose down -v                  # Eliminar también volúmenes
+docker system prune -a                  # Limpiar todo Docker
+```
+
+---
+
+### 9.2 Estructura del Proyecto Detallada
 
 ```
 taxi-api/
 ├── README.md
-├── TAXI_API_SPEC.md          # Este documento
+├── TAXI_API_SPEC.md
+├── Dockerfile
 ├── docker-compose.yml
+├── docker-compose.prod.yml
 ├── .env.example
+├── .dockerignore
 ├── .gitignore
+├── requirements.txt
+├── requirements-dev.txt
 │
 ├── src/
 │   ├── __init__.py
-│   ├── main.py               # FastAPI app
-│   ├── config.py             # Settings con pydantic
+│   ├── main.py               # FastAPI app entry point
+│   ├── config.py             # Settings (Pydantic BaseSettings)
 │   │
-│   ├── domain/               # Entidades de dominio
-│   │   ├── driver.py
-│   │   ├── vehicle.py
-│   │   ├── trip.py
-│   │   └── shift.py
-│   │
-│   ├── application/          # Casos de uso
-│   │   ├── sync_uber.py
-│   │   ├── sync_freenow.py
-│   │   ├── sync_prima.py
-│   │   └── calculate_summaries.py
-│   │
-│   ├── infrastructure/       # Implementaciones
-│   │   ├── database/
-│   │   │   ├── models.py     # SQLAlchemy models
-│   │   │   └── repositories/
+│   ├── domain/               # 🎯 DOMAIN LAYER (Business Logic)
+│   │   ├── __init__.py
+│   │   ├── entities/
+│   │   │   ├── __init__.py
+│   │   │   ├── driver.py     # Driver entity
+│   │   │   ├── owner.py      # Owner entity
+│   │   │   ├── vehicle.py    # Vehicle entity
+│   │   │   ├── trip.py       # Trip entity (CORE)
+│   │   │   └── shift.py      # Shift entity
 │   │   │
-│   │   ├── connectors/
+│   │   ├── value_objects/
+│   │   │   ├── __init__.py
+│   │   │   ├── money.py      # Money VO (amount + currency)
+│   │   │   ├── coordinates.py # GPS coordinates
+│   │   │   └── email.py      # Email validation
+│   │   │
+│   │   └── repositories/     # 🔌 Repository Interfaces (abstract)
+│   │       ├── __init__.py
+│   │       ├── trip_repository.py
+│   │       ├── driver_repository.py
+│   │       └── vehicle_repository.py
+│   │
+│   ├── application/          # 📋 APPLICATION LAYER (Use Cases)
+│   │   ├── __init__.py
+│   │   ├── use_cases/
+│   │   │   ├── __init__.py
+│   │   │   ├── sync_uber.py
+│   │   │   ├── sync_freenow.py
+│   │   │   ├── sync_prima.py
+│   │   │   ├── create_trip.py
+│   │   │   ├── get_trips.py
+│   │   │   └── calculate_summaries.py
+│   │   │
+│   │   ├── dto/              # Data Transfer Objects
+│   │   │   ├── __init__.py
+│   │   │   ├── trip_dto.py
+│   │   │   └── summary_dto.py
+│   │   │
+│   │   └── services/         # Domain services
+│   │       ├── __init__.py
+│   │       ├── deduplication_service.py
+│   │       └── billing_service.py
+│   │
+│   ├── infrastructure/       # 🔧 INFRASTRUCTURE LAYER (Implementations)
+│   │   ├── __init__.py
+│   │   │
+│   │   ├── database/
+│   │   │   ├── __init__.py
+│   │   │   ├── connection.py      # DB connection & session
+│   │   │   ├── base.py            # SQLAlchemy Base
+│   │   │   │
+│   │   │   ├── models/            # SQLAlchemy ORM models
+│   │   │   │   ├── __init__.py
+│   │   │   │   ├── owner.py
+│   │   │   │   ├── driver.py
+│   │   │   │   ├── vehicle.py
+│   │   │   │   ├── trip.py
+│   │   │   │   ├── shift.py
+│   │   │   │   ├── sync_log.py
+│   │   │   │   ├── freenow_import.py
+│   │   │   │   └── dedup_review.py
+│   │   │   │
+│   │   │   └── repositories/      # Repository implementations
+│   │   │       ├── __init__.py
+│   │   │       ├── sqlalchemy_trip_repository.py
+│   │   │       ├── sqlalchemy_driver_repository.py
+│   │   │       └── sqlalchemy_vehicle_repository.py
+│   │   │
+│   │   ├── connectors/            # External API connectors
+│   │   │   ├── __init__.py
 │   │   │   ├── uber_connector.py
 │   │   │   ├── freenow_connector.py
 │   │   │   └── prima_connector.py
 │   │   │
-│   │   └── external/
-│   │       └── telegram.py
+│   │   └── external/              # External services
+│   │       ├── __init__.py
+│   │       ├── telegram.py
+│   │       └── email.py
 │   │
-│   └── api/                  # Endpoints FastAPI
+│   └── api/                  # 🌐 API LAYER (FastAPI endpoints)
+│       ├── __init__.py
+│       ├── dependencies.py   # Dependency injection
+│       ├── middleware.py
+│       │
 │       ├── routes/
-│       │   ├── trips.py
-│       │   ├── drivers.py
-│       │   ├── reports.py
-│       │   └── sync.py
-│       └── schemas/
+│       │   ├── __init__.py
+│       │   ├── health.py     # Health check
+│       │   ├── trips.py      # Trip endpoints
+│       │   ├── drivers.py    # Driver endpoints
+│       │   ├── vehicles.py   # Vehicle endpoints
+│       │   ├── summaries.py  # Summary/reports endpoints
+│       │   └── sync.py       # Manual sync triggers
+│       │
+│       └── schemas/          # Pydantic schemas (request/response)
+│           ├── __init__.py
+│           ├── trip.py
+│           ├── driver.py
+│           ├── vehicle.py
+│           └── common.py     # Shared schemas (pagination, etc)
 │
-├── tasks/                    # Celery tasks
+├── tasks/                    # 📅 Celery tasks
 │   ├── __init__.py
-│   └── sync_tasks.py
+│   ├── celery_app.py        # Celery configuration
+│   ├── sync_tasks.py        # Sync tasks (Uber, FreeNow, Prima)
+│   └── maintenance_tasks.py # GPS anonymization, cleanups
 │
-├── migrations/               # Alembic
+├── migrations/               # 🗄️ Alembic migrations
+│   ├── env.py
+│   ├── script.py.mako
 │   └── versions/
+│       └── 001_initial_schema.py
 │
-├── tests/                    # Tests TDD
+├── tests/                    # 🧪 Tests (TDD)
+│   ├── __init__.py
+│   ├── conftest.py          # Pytest fixtures
+│   │
 │   ├── unit/
+│   │   ├── domain/
+│   │   │   ├── test_trip_entity.py
+│   │   │   └── test_money_vo.py
+│   │   ├── application/
+│   │   │   └── test_create_trip_use_case.py
+│   │   └── infrastructure/
+│   │       └── test_uber_connector.py
+│   │
 │   ├── integration/
+│   │   ├── test_trip_repository.py
+│   │   └── test_database.py
+│   │
 │   └── e2e/
+│       ├── test_api_trips.py
+│       └── test_sync_flow.py
 │
-├── frontend/                 # React Dashboard
+├── frontend/                 # ⚛️ React Dashboard
+│   ├── package.json
 │   ├── src/
-│   └── package.json
+│   └── public/
 │
-└── scripts/
-    ├── init_db.py
-    └── import_csv.py
+├── scripts/
+│   ├── init_db.py
+│   ├── init_db.sql
+│   ├── import_csv.py
+│   └── backfill_historical.py
+│
+└── monitoring/               # 📊 Observability
+    ├── prometheus.yml
+    └── grafana-dashboards/
+        └── taxi-api-dashboard.json
+```
+
+---
+
+## 9.3 Capa de Persistencia - Implementación Completa
+
+### 9.3.1 Conexión a PostgreSQL
+
+**`src/infrastructure/database/connection.py`**
+
+```python
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy.pool import QueuePool
+from contextlib import contextmanager
+from typing import Generator
+from src.config import settings
+
+# Engine con pool de conexiones
+engine = create_engine(
+    settings.DATABASE_URL,
+    poolclass=QueuePool,
+    pool_size=10,
+    max_overflow=20,
+    pool_pre_ping=True,  # Verifica conexión antes de usar
+    echo=settings.DEBUG,  # SQL logging en desarrollo
+)
+
+# Session factory
+SessionLocal = sessionmaker(
+    autocommit=False,
+    autoflush=False,
+    bind=engine
+)
+
+
+def get_db() -> Generator[Session, None, None]:
+    """
+    Dependency para FastAPI.
+    Crea una sesión por request, la cierra al final.
+    """
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+@contextmanager
+def get_db_context() -> Generator[Session, None, None]:
+    """
+    Context manager para uso fuera de FastAPI (Celery, scripts).
+    
+    Usage:
+        with get_db_context() as db:
+            repo = SQLAlchemyTripRepository(db)
+            trips = repo.get_all()
+    """
+    db = SessionLocal()
+    try:
+        yield db
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
+```
+
+---
+
+**`src/infrastructure/database/base.py`**
+
+```python
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy import MetaData
+
+# Naming convention para constraints (facilita migrations)
+convention = {
+    "ix": "ix_%(column_0_label)s",
+    "uq": "uq_%(table_name)s_%(column_0_name)s",
+    "ck": "ck_%(table_name)s_%(constraint_name)s",
+    "fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s",
+    "pk": "pk_%(table_name)s"
+}
+
+metadata = MetaData(naming_convention=convention)
+Base = declarative_base(metadata=metadata)
+```
+
+---
+
+### 9.3.2 Modelos SQLAlchemy (ORM)
+
+**`src/infrastructure/database/models/owner.py`**
+
+```python
+from sqlalchemy import Column, String, Boolean, TIMESTAMP
+from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import relationship
+from sqlalchemy.sql import func
+import uuid
+
+from src.infrastructure.database.base import Base
+
+
+class OwnerModel(Base):
+    """Modelo SQLAlchemy para propietarios de taxis"""
+    
+    __tablename__ = "owners"
+    
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name = Column(String(100), nullable=False)
+    tax_id = Column(String(50), unique=True, nullable=False, index=True)
+    email = Column(String(255))
+    phone = Column(String(20))
+    is_active = Column(Boolean, default=True, nullable=False)
+    
+    created_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), onupdate=func.now())
+    
+    # Relationships
+    drivers = relationship("DriverModel", back_populates="owner")
+    vehicles = relationship("VehicleModel", back_populates="owner")
+```
+
+---
+
+**`src/infrastructure/database/models/driver.py`**
+
+```python
+from sqlalchemy import Column, String, Boolean, TIMESTAMP, ForeignKey
+from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import relationship
+from sqlalchemy.sql import func
+import uuid
+
+from src.infrastructure.database.base import Base
+
+
+class DriverModel(Base):
+    """Modelo SQLAlchemy para conductores"""
+    
+    __tablename__ = "drivers"
+    
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name = Column(String(100), nullable=False)
+    email = Column(String(255), unique=True, index=True)
+    phone = Column(String(20))
+    license_number = Column(String(50), unique=True, nullable=False, index=True)
+    
+    # Foreign Keys
+    owner_id = Column(UUID(as_uuid=True), ForeignKey("owners.id"), nullable=False, index=True)
+    
+    # Platform IDs
+    uber_driver_id = Column(String(100), index=True)
+    freenow_driver_id = Column(String(100), index=True)
+    
+    is_owner = Column(Boolean, default=False, nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False)
+    
+    created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
+    updated_at = Column(TIMESTAMP(timezone=True), onupdate=func.now())
+    
+    # Relationships
+    owner = relationship("OwnerModel", back_populates="drivers")
+    trips = relationship("TripModel", back_populates="driver")
+    shifts = relationship("ShiftModel", back_populates="driver")
+```
+
+---
+
+**`src/infrastructure/database/models/vehicle.py`**
+
+```python
+from sqlalchemy import Column, String, Integer, Boolean, TIMESTAMP, ForeignKey
+from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import relationship
+from sqlalchemy.sql import func
+import uuid
+
+from src.infrastructure.database.base import Base
+
+
+class VehicleModel(Base):
+    """Modelo SQLAlchemy para vehículos (taxis)"""
+    
+    __tablename__ = "vehicles"
+    
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    plate = Column(String(20), unique=True, nullable=False, index=True)
+    license_number = Column(String(50), nullable=False, index=True)
+    model = Column(String(100))
+    brand = Column(String(50))
+    year = Column(Integer)
+    
+    # Foreign Keys
+    owner_id = Column(UUID(as_uuid=True), ForeignKey("owners.id"), nullable=False, index=True)
+    
+    # Platform IDs
+    taximeter_id = Column(String(50), index=True)
+    uber_vehicle_id = Column(String(100))
+    freenow_vehicle_id = Column(String(100))
+    
+    is_active = Column(Boolean, default=True, nullable=False)
+    created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
+    
+    # Relationships
+    owner = relationship("OwnerModel", back_populates="vehicles")
+    trips = relationship("TripModel", back_populates="vehicle")
+    shifts = relationship("ShiftModel", back_populates="vehicle")
+```
+
+---
+
+**`src/infrastructure/database/models/trip.py`** (MODELO CORE)
+
+```python
+from sqlalchemy import (
+    Column, String, Integer, Boolean, TIMESTAMP, ForeignKey,
+    Numeric, Text, Index, CheckConstraint
+)
+from sqlalchemy.dialects.postgresql import UUID, JSONB
+from sqlalchemy.orm import relationship, column_property
+from sqlalchemy.sql import func
+from sqlalchemy.ext.hybrid import hybrid_property
+import uuid
+
+from src.infrastructure.database.base import Base
+
+
+class TripModel(Base):
+    """Modelo SQLAlchemy para viajes (TABLA CENTRAL)"""
+    
+    __tablename__ = "trips"
+    
+    # Primary Key
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    
+    # Identificación
+    source = Column(String(20), nullable=False, index=True)  # uber, freenow, prima, street
+    external_id = Column(String(100))  # ID de la plataforma externa
+    
+    # Foreign Keys
+    driver_id = Column(UUID(as_uuid=True), ForeignKey("drivers.id"), nullable=False, index=True)
+    vehicle_id = Column(UUID(as_uuid=True), ForeignKey("vehicles.id"), nullable=False, index=True)
+    shift_id = Column(UUID(as_uuid=True), ForeignKey("shifts.id"), index=True)
+    
+    # Tiempo
+    started_at = Column(TIMESTAMP(timezone=True), nullable=False, index=True)
+    ended_at = Column(TIMESTAMP(timezone=True))
+    duration_minutes = Column(Numeric(10, 2))
+    
+    # Ubicación (GPS)
+    origin_lat = Column(Numeric(10, 7))
+    origin_lng = Column(Numeric(10, 7))
+    dest_lat = Column(Numeric(10, 7))
+    dest_lng = Column(Numeric(10, 7))
+    origin_address = Column(Text)
+    dest_address = Column(Text)
+    
+    # Distancia
+    distance_km = Column(Numeric(10, 2))
+    
+    # Importes (multi-currency)
+    currency_code = Column(String(3), nullable=False, default='EUR')
+    gross_amount = Column(Numeric(10, 2), nullable=False)
+    commission = Column(Numeric(10, 2), default=0)
+    platform_fee = Column(Numeric(10, 2), default=0)
+    taxes_vat = Column(Numeric(10, 2), default=0)
+    tips = Column(Numeric(10, 2), default=0)
+    tolls = Column(Numeric(10, 2), default=0)
+    adjustments = Column(Numeric(10, 2), default=0)
+    payout_amount = Column(Numeric(10, 2))  # Real amount received
+    exchange_rate = Column(Numeric(10, 4))
+    
+    # Desglose detallado
+    amount_breakdown = Column(JSONB, default={})
+    
+    # Detalles
+    payment_method = Column(String(20))  # card, cash, app
+    tariff_code = Column(String(20))
+    
+    # Deduplicación
+    merged_into_trip_id = Column(UUID(as_uuid=True), ForeignKey("trips.id"))
+    is_canonical = Column(Boolean, default=True, nullable=False, index=True)
+    
+    # Datos originales
+    raw_data = Column(JSONB)
+    
+    # Metadata
+    created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
+    updated_at = Column(TIMESTAMP(timezone=True), onupdate=func.now())
+    
+    # Relationships
+    driver = relationship("DriverModel", back_populates="trips")
+    vehicle = relationship("VehicleModel", back_populates="trips")
+    shift = relationship("ShiftModel", back_populates="trips")
+    
+    # Self-referential para duplicados
+    merged_into = relationship("TripModel", remote_side=[id], foreign_keys=[merged_into_trip_id])
+    
+    # Computed property (sin storage en DB, se calcula al acceder)
+    @hybrid_property
+    def net_amount(self):
+        """Calcula el monto neto (gross - commission - platform_fee)"""
+        return self.gross_amount - self.commission - self.platform_fee
+    
+    # Check constraints
+    __table_args__ = (
+        CheckConstraint('gross_amount >= 0', name='ck_trips_gross_amount_positive'),
+        CheckConstraint('commission >= 0', name='ck_trips_commission_positive'),
+        CheckConstraint('distance_km >= 0', name='ck_trips_distance_positive'),
+        Index('idx_trips_source', 'source'),
+        Index('idx_trips_canonical', 'is_canonical', postgresql_where=(is_canonical == True)),
+        Index('idx_trips_driver_date', 'driver_id', 'started_at'),
+        Index('idx_unique_trip_external_id', 'source', 'external_id', unique=True,
+              postgresql_where=(external_id.isnot(None))),
+    )
+    
+    def __repr__(self):
+        return f"<Trip(id={self.id}, source={self.source}, amount={self.gross_amount} {self.currency_code})>"
+```
+
+---
+
+### 9.3.3 Repository Pattern - Interfaces (Domain Layer)
+
+**`src/domain/repositories/trip_repository.py`**
+
+```python
+from abc import ABC, abstractmethod
+from typing import List, Optional
+from datetime import datetime
+from uuid import UUID
+
+from src.domain.entities.trip import Trip
+
+
+class TripRepository(ABC):
+    """
+    Interfaz abstracta del Repository Pattern para Trips.
+    
+    Define el contrato que deben cumplir todas las implementaciones.
+    Esta interfaz vive en la capa de DOMAIN (no sabe de SQLAlchemy).
+    """
+    
+    @abstractmethod
+    def get_by_id(self, trip_id: UUID) -> Optional[Trip]:
+        """Obtiene un trip por su ID"""
+        pass
+    
+    @abstractmethod
+    def get_all(
+        self,
+        skip: int = 0,
+        limit: int = 100,
+        canonical_only: bool = True
+    ) -> List[Trip]:
+        """Obtiene lista de trips con paginación"""
+        pass
+    
+    @abstractmethod
+    def get_by_driver(
+        self,
+        driver_id: UUID,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None
+    ) -> List[Trip]:
+        """Obtiene trips de un conductor en un rango de fechas"""
+        pass
+    
+    @abstractmethod
+    def get_by_source(self, source: str, date: datetime) -> List[Trip]:
+        """Obtiene trips de una fuente específica en una fecha"""
+        pass
+    
+    @abstractmethod
+    def save(self, trip: Trip) -> Trip:
+        """Crea o actualiza un trip"""
+        pass
+    
+    @abstractmethod
+    def delete(self, trip_id: UUID) -> bool:
+        """Elimina un trip (soft delete recommended)"""
+        pass
+    
+    @abstractmethod
+    def exists_by_external_id(self, source: str, external_id: str) -> bool:
+        """Verifica si existe un trip con ese external_id"""
+        pass
+    
+    @abstractmethod
+    def get_canonical_trips_for_dedup(
+        self,
+        vehicle_id: UUID,
+        start_time: datetime,
+        end_time: datetime
+    ) -> List[Trip]:
+        """Obtiene trips canónicos para deduplicación en una ventana temporal"""
+        pass
+```
+
+---
+
+### 9.3.4 Repository Pattern - Implementación (Infrastructure Layer)
+
+**`src/infrastructure/database/repositories/sqlalchemy_trip_repository.py`**
+
+```python
+from typing import List, Optional
+from datetime import datetime
+from uuid import UUID
+from sqlalchemy.orm import Session
+from sqlalchemy import and_, or_
+
+from src.domain.repositories.trip_repository import TripRepository
+from src.domain.entities.trip import Trip
+from src.infrastructure.database.models.trip import TripModel
+
+
+class SQLAlchemyTripRepository(TripRepository):
+    """
+    Implementación concreta del TripRepository usando SQLAlchemy.
+    
+    Esta clase vive en la capa de INFRASTRUCTURE y conoce SQLAlchemy.
+    Traduce entre TripModel (ORM) y Trip (Domain Entity).
+    """
+    
+    def __init__(self, session: Session):
+        self.session = session
+    
+    def get_by_id(self, trip_id: UUID) -> Optional[Trip]:
+        """Obtiene un trip por ID"""
+        trip_model = self.session.query(TripModel).filter(
+            TripModel.id == trip_id
+        ).first()
+        
+        if not trip_model:
+            return None
+        
+        return self._to_entity(trip_model)
+    
+    def get_all(
+        self,
+        skip: int = 0,
+        limit: int = 100,
+        canonical_only: bool = True
+    ) -> List[Trip]:
+        """Obtiene trips con paginación"""
+        query = self.session.query(TripModel)
+        
+        if canonical_only:
+            query = query.filter(TripModel.is_canonical == True)
+        
+        trip_models = query.offset(skip).limit(limit).all()
+        return [self._to_entity(tm) for tm in trip_models]
+    
+    def get_by_driver(
+        self,
+        driver_id: UUID,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None
+    ) -> List[Trip]:
+        """Obtiene trips de un conductor con filtros de fecha"""
+        query = self.session.query(TripModel).filter(
+            TripModel.driver_id == driver_id,
+            TripModel.is_canonical == True
+        )
+        
+        if start_date:
+            query = query.filter(TripModel.started_at >= start_date)
+        
+        if end_date:
+            query = query.filter(TripModel.started_at <= end_date)
+        
+        trip_models = query.order_by(TripModel.started_at.desc()).all()
+        return [self._to_entity(tm) for tm in trip_models]
+    
+    def get_by_source(self, source: str, date: datetime) -> List[Trip]:
+        """Obtiene trips de una fuente en una fecha específica"""
+        start_of_day = date.replace(hour=0, minute=0, second=0, microsecond=0)
+        end_of_day = date.replace(hour=23, minute=59, second=59, microsecond=999999)
+        
+        trip_models = self.session.query(TripModel).filter(
+            TripModel.source == source,
+            TripModel.started_at >= start_of_day,
+            TripModel.started_at <= end_of_day
+        ).all()
+        
+        return [self._to_entity(tm) for tm in trip_models]
+    
+    def save(self, trip: Trip) -> Trip:
+        """
+        Guarda un trip (create o update).
+        
+        Si el trip tiene ID y existe en DB → UPDATE
+        Si no tiene ID o no existe → CREATE
+        """
+        if trip.id:
+            # Update existing
+            trip_model = self.session.query(TripModel).filter(
+                TripModel.id == trip.id
+            ).first()
+            
+            if trip_model:
+                self._update_model_from_entity(trip_model, trip)
+            else:
+                trip_model = self._to_model(trip)
+                self.session.add(trip_model)
+        else:
+            # Create new
+            trip_model = self._to_model(trip)
+            self.session.add(trip_model)
+        
+        self.session.flush()  # Para obtener el ID generado
+        self.session.refresh(trip_model)
+        
+        return self._to_entity(trip_model)
+    
+    def delete(self, trip_id: UUID) -> bool:
+        """Elimina un trip (hard delete - considerar soft delete)"""
+        result = self.session.query(TripModel).filter(
+            TripModel.id == trip_id
+        ).delete()
+        
+        return result > 0
+    
+    def exists_by_external_id(self, source: str, external_id: str) -> bool:
+        """Verifica si existe un trip con ese external_id"""
+        count = self.session.query(TripModel).filter(
+            TripModel.source == source,
+            TripModel.external_id == external_id
+        ).count()
+        
+        return count > 0
+    
+    def get_canonical_trips_for_dedup(
+        self,
+        vehicle_id: UUID,
+        start_time: datetime,
+        end_time: datetime
+    ) -> List[Trip]:
+        """
+        Obtiene trips canónicos del mismo vehículo en una ventana temporal.
+        Usado por el servicio de deduplicación.
+        """
+        trip_models = self.session.query(TripModel).filter(
+            TripModel.vehicle_id == vehicle_id,
+            TripModel.is_canonical == True,
+            TripModel.started_at >= start_time,
+            TripModel.started_at <= end_time
+        ).order_by(TripModel.started_at).all()
+        
+        return [self._to_entity(tm) for tm in trip_models]
+    
+    # ==================
+    # Mappers (ORM ↔ Entity)
+    # ==================
+    
+    def _to_entity(self, model: TripModel) -> Trip:
+        """Convierte TripModel (ORM) a Trip (Domain Entity)"""
+        from src.domain.entities.trip import Trip
+        
+        return Trip(
+            id=model.id,
+            source=model.source,
+            external_id=model.external_id,
+            driver_id=model.driver_id,
+            vehicle_id=model.vehicle_id,
+            shift_id=model.shift_id,
+            started_at=model.started_at,
+            ended_at=model.ended_at,
+            duration_minutes=model.duration_minutes,
+            origin_lat=model.origin_lat,
+            origin_lng=model.origin_lng,
+            dest_lat=model.dest_lat,
+            dest_lng=model.dest_lng,
+            origin_address=model.origin_address,
+            dest_address=model.dest_address,
+            distance_km=model.distance_km,
+            currency_code=model.currency_code,
+            gross_amount=model.gross_amount,
+            commission=model.commission,
+            platform_fee=model.platform_fee,
+            taxes_vat=model.taxes_vat,
+            tips=model.tips,
+            tolls=model.tolls,
+            adjustments=model.adjustments,
+            payout_amount=model.payout_amount,
+            exchange_rate=model.exchange_rate,
+            amount_breakdown=model.amount_breakdown or {},
+            payment_method=model.payment_method,
+            tariff_code=model.tariff_code,
+            merged_into_trip_id=model.merged_into_trip_id,
+            is_canonical=model.is_canonical,
+            raw_data=model.raw_data,
+            created_at=model.created_at,
+            updated_at=model.updated_at
+        )
+    
+    def _to_model(self, entity: Trip) -> TripModel:
+        """Convierte Trip (Domain Entity) a TripModel (ORM)"""
+        return TripModel(
+            id=entity.id,
+            source=entity.source,
+            external_id=entity.external_id,
+            driver_id=entity.driver_id,
+            vehicle_id=entity.vehicle_id,
+            shift_id=entity.shift_id,
+            started_at=entity.started_at,
+            ended_at=entity.ended_at,
+            duration_minutes=entity.duration_minutes,
+            origin_lat=entity.origin_lat,
+            origin_lng=entity.origin_lng,
+            dest_lat=entity.dest_lat,
+            dest_lng=entity.dest_lng,
+            origin_address=entity.origin_address,
+            dest_address=entity.dest_address,
+            distance_km=entity.distance_km,
+            currency_code=entity.currency_code,
+            gross_amount=entity.gross_amount,
+            commission=entity.commission,
+            platform_fee=entity.platform_fee,
+            taxes_vat=entity.taxes_vat,
+            tips=entity.tips,
+            tolls=entity.tolls,
+            adjustments=entity.adjustments,
+            payout_amount=entity.payout_amount,
+            exchange_rate=entity.exchange_rate,
+            amount_breakdown=entity.amount_breakdown,
+            payment_method=entity.payment_method,
+            tariff_code=entity.tariff_code,
+            merged_into_trip_id=entity.merged_into_trip_id,
+            is_canonical=entity.is_canonical,
+            raw_data=entity.raw_data
+        )
+    
+    def _update_model_from_entity(self, model: TripModel, entity: Trip):
+        """Actualiza un modelo existente con datos de la entidad"""
+        model.source = entity.source
+        model.external_id = entity.external_id
+        model.driver_id = entity.driver_id
+        model.vehicle_id = entity.vehicle_id
+        model.shift_id = entity.shift_id
+        model.started_at = entity.started_at
+        model.ended_at = entity.ended_at
+        model.duration_minutes = entity.duration_minutes
+        model.origin_lat = entity.origin_lat
+        model.origin_lng = entity.origin_lng
+        model.dest_lat = entity.dest_lat
+        model.dest_lng = entity.dest_lng
+        model.distance_km = entity.distance_km
+        model.gross_amount = entity.gross_amount
+        model.commission = entity.commission
+        model.platform_fee = entity.platform_fee
+        model.taxes_vat = entity.taxes_vat
+        model.tips = entity.tips
+        model.tolls = entity.tolls
+        model.adjustments = entity.adjustments
+        model.payout_amount = entity.payout_amount
+        model.is_canonical = entity.is_canonical
+        model.merged_into_trip_id = entity.merged_into_trip_id
+        # ... demás campos
+```
+
+---
+
+### 9.3.5 Domain Entity (Business Logic)
+
+**`src/domain/entities/trip.py`**
+
+```python
+from dataclasses import dataclass, field
+from datetime import datetime
+from decimal import Decimal
+from typing import Optional, Dict
+from uuid import UUID, uuid4
+
+
+@dataclass
+class Trip:
+    """
+    Entidad de dominio para Trip (Viaje).
+    
+    Esta clase representa la lógica de negocio pura, sin dependencias de DB.
+    NO conoce SQLAlchemy, FastAPI, ni nada de infrastructure.
+    """
+    
+    # Identificación
+    source: str  # uber, freenow, prima, street
+    started_at: datetime
+    gross_amount: Decimal
+    currency_code: str
+    driver_id: UUID
+    vehicle_id: UUID
+    
+    # Optional fields
+    id: Optional[UUID] = field(default_factory=uuid4)
+    external_id: Optional[str] = None
+    shift_id: Optional[UUID] = None
+    ended_at: Optional[datetime] = None
+    duration_minutes: Optional[Decimal] = None
+    
+    # Location
+    origin_lat: Optional[Decimal] = None
+    origin_lng: Optional[Decimal] = None
+    dest_lat: Optional[Decimal] = None
+    dest_lng: Optional[Decimal] = None
+    origin_address: Optional[str] = None
+    dest_address: Optional[str] = None
+    
+    # Distance
+    distance_km: Optional[Decimal] = None
+    
+    # Financial
+    commission: Decimal = Decimal("0.00")
+    platform_fee: Decimal = Decimal("0.00")
+    taxes_vat: Decimal = Decimal("0.00")
+    tips: Decimal = Decimal("0.00")
+    tolls: Decimal = Decimal("0.00")
+    adjustments: Decimal = Decimal("0.00")
+    payout_amount: Optional[Decimal] = None
+    exchange_rate: Optional[Decimal] = None
+    amount_breakdown: Dict = field(default_factory=dict)
+    
+    # Details
+    payment_method: Optional[str] = None
+    tariff_code: Optional[str] = None
+    
+    # Deduplication
+    merged_into_trip_id: Optional[UUID] = None
+    is_canonical: bool = True
+    
+    # Raw data
+    raw_data: Optional[Dict] = None
+    
+    # Timestamps
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    
+    # ==================
+    # Business Logic
+    # ==================
+    
+    @property
+    def net_amount(self) -> Decimal:
+        """Calcula el monto neto después de comisiones"""
+        return self.gross_amount - self.commission - self.platform_fee
+    
+    @property
+    def total_fees(self) -> Decimal:
+        """Total de fees (commission + platform_fee)"""
+        return self.commission + self.platform_fee
+    
+    @property
+    def fee_percentage(self) -> Decimal:
+        """Porcentaje de fees sobre el gross_amount"""
+        if self.gross_amount == 0:
+            return Decimal("0.00")
+        return (self.total_fees / self.gross_amount) * 100
+    
+    def is_profitable(self, min_net_amount: Decimal = Decimal("5.00")) -> bool:
+        """Verifica si el viaje es rentable según un mínimo"""
+        return self.net_amount >= min_net_amount
+    
+    def mark_as_duplicate(self, canonical_trip_id: UUID) -> None:
+        """Marca este trip como duplicado de otro canónico"""
+        self.is_canonical = False
+        self.merged_into_trip_id = canonical_trip_id
+    
+    def __str__(self):
+        return f"Trip({self.source}, {self.gross_amount} {self.currency_code}, {self.started_at})"
+```
+
+---
+
+### 9.3.6 Dependency Injection (FastAPI)
+
+**`src/api/dependencies.py`**
+
+```python
+from fastapi import Depends
+from sqlalchemy.orm import Session
+
+from src.infrastructure.database.connection import get_db
+from src.infrastructure.database.repositories.sqlalchemy_trip_repository import SQLAlchemyTripRepository
+from src.domain.repositories.trip_repository import TripRepository
+
+
+def get_trip_repository(db: Session = Depends(get_db)) -> TripRepository:
+    """
+    Dependency para inyectar TripRepository en endpoints de FastAPI.
+    
+    Retorna la interfaz (TripRepository), pero FastAPI inyecta
+    la implementación concreta (SQLAlchemyTripRepository).
+    
+    Usage en endpoint:
+        @app.get("/trips/{trip_id}")
+        def get_trip(
+            trip_id: UUID,
+            repo: TripRepository = Depends(get_trip_repository)
+        ):
+            trip = repo.get_by_id(trip_id)
+            return trip
+    """
+    return SQLAlchemyTripRepository(db)
+```
+
+---
+
+### 9.3.7 Ejemplo de Uso en Endpoint FastAPI
+
+**`src/api/routes/trips.py`**
+
+```python
+from fastapi import APIRouter, Depends, HTTPException, status
+from typing import List
+from uuid import UUID
+
+from src.domain.repositories.trip_repository import TripRepository
+from src.api.dependencies import get_trip_repository
+from src.api.schemas.trip import TripResponse, TripListResponse
+from src.domain.entities.trip import Trip
+
+router = APIRouter(prefix="/trips", tags=["trips"])
+
+
+@router.get("/{trip_id}", response_model=TripResponse)
+def get_trip(
+    trip_id: UUID,
+    repo: TripRepository = Depends(get_trip_repository)
+):
+    """
+    Obtiene un trip por ID.
+    
+    Clean Architecture en acción:
+    1. Endpoint (API layer) recibe request
+    2. Dependency injection inyecta repository
+    3. Repository (domain interface) obtiene entity
+    4. Retorna entity convertida a schema (response)
+    """
+    trip = repo.get_by_id(trip_id)
+    
+    if not trip:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Trip {trip_id} not found"
+        )
+    
+    return TripResponse.from_entity(trip)
+
+
+@router.get("/", response_model=TripListResponse)
+def list_trips(
+    skip: int = 0,
+    limit: int = 100,
+    canonical_only: bool = True,
+    repo: TripRepository = Depends(get_trip_repository)
+):
+    """Lista trips con paginación"""
+    trips = repo.get_all(skip=skip, limit=limit, canonical_only=canonical_only)
+    
+    return TripListResponse(
+        data=[TripResponse.from_entity(t) for t in trips],
+        total=len(trips),
+        skip=skip,
+        limit=limit
+    )
+```
+
+---
+
+### 9.3.8 Unit of Work Pattern (Transacciones)
+
+**`src/infrastructure/database/unit_of_work.py`**
+
+```python
+from typing import Optional
+from sqlalchemy.orm import Session
+
+from src.infrastructure.database.connection import SessionLocal
+from src.infrastructure.database.repositories.sqlalchemy_trip_repository import SQLAlchemyTripRepository
+from src.infrastructure.database.repositories.sqlalchemy_driver_repository import SQLAlchemyDriverRepository
+
+
+class UnitOfWork:
+    """
+    Unit of Work pattern para gestionar transacciones.
+    
+    Agrupa múltiples operaciones de repositories en una sola transacción.
+    Si algo falla, hace rollback de todo.
+    
+    Usage:
+        with UnitOfWork() as uow:
+            trip = uow.trips.get_by_id(trip_id)
+            trip.mark_as_duplicate(canonical_id)
+            uow.trips.save(trip)
+            uow.commit()  # Commit solo si todo ok
+    """
+    
+    def __init__(self):
+        self.session: Optional[Session] = None
+    
+    def __enter__(self):
+        self.session = SessionLocal()
+        
+        # Instanciar repositories con la misma sesión
+        self.trips = SQLAlchemyTripRepository(self.session)
+        self.drivers = SQLAlchemyDriverRepository(self.session)
+        # ... más repositories
+        
+        return self
+    
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if exc_type is not None:
+            # Hubo excepción → rollback
+            self.rollback()
+        
+        self.session.close()
+    
+    def commit(self):
+        """Commit de la transacción"""
+        self.session.commit()
+    
+    def rollback(self):
+        """Rollback de la transacción"""
+        self.session.rollback()
+```
+
+**Ejemplo de uso en caso de uso:**
+
+```python
+# src/application/use_cases/mark_trip_as_duplicate.py
+
+from uuid import UUID
+from src.infrastructure.database.unit_of_work import UnitOfWork
+
+
+def mark_trip_as_duplicate_use_case(trip_id: UUID, canonical_trip_id: UUID) -> None:
+    """
+    Caso de uso: Marcar un trip como duplicado.
+    
+    Usa Unit of Work para gestionar la transacción.
+    """
+    with UnitOfWork() as uow:
+        # Obtener trip
+        trip = uow.trips.get_by_id(trip_id)
+        
+        if not trip:
+            raise ValueError(f"Trip {trip_id} not found")
+        
+        # Verificar que el canónico existe
+        canonical = uow.trips.get_by_id(canonical_trip_id)
+        if not canonical:
+            raise ValueError(f"Canonical trip {canonical_trip_id} not found")
+        
+        # Business logic (Domain layer)
+        trip.mark_as_duplicate(canonical_trip_id)
+        
+        # Guardar cambios
+        uow.trips.save(trip)
+        
+        # Commit (o rollback automático si hay excepción)
+        uow.commit()
 ```
 
 ---
