@@ -18,9 +18,12 @@
 6. [Flujo de Sincronización](#6-flujo-de-sincronización-diaria)
 7. [API Contract](#7-api-contract---endpoints-fastapi)
 8. [Dashboard y Métricas](#8-dashboard---métricas-clave)
-9. [Estructura del Proyecto](#9-estructura-del-proyecto)
+9. [Infraestructura y Deployment](#9-infraestructura-y-deployment)
 10. [Estrategia de Testing](#10-estrategia-de-testing)
-11. [Próximos Pasos](#11-próximos-pasos)
+11. [CI/CD & Deployment Automation](#11-cicd--deployment-automation)
+12. [Testing & Quality Assurance](#12-testing--quality-assurance)
+13. [Production Operations](#13-production-operations)
+14. [Próximos Pasos](#14-próximos-pasos)
 
 ---
 
@@ -4972,7 +4975,715 @@ docker-compose exec redis redis-cli LLEN celery
 
 ---
 
-### 13.4 Debug Playbook
+### 13.4 Structured Logging (JSON Format)
+
+**¿Por qué JSON logs?**
+- ✅ Legibles por máquinas (Loki, Elasticsearch)
+- ✅ Búsquedas eficientes (`level=ERROR`, `source=uber`)
+- ✅ Context propagation (trace_id, request_id)
+- ✅ Parsing automático en Grafana
+
+**`src/infrastructure/logging/logger.py`**
+
+```python
+import logging
+import json
+import sys
+from datetime import datetime
+from typing import Any, Dict
+from pythonjsonlogger import jsonlogger
+
+
+class CustomJsonFormatter(jsonlogger.JsonFormatter):
+    """
+    Custom JSON formatter para logs estructurados.
+    
+    Añade campos estándar a cada log:
+    - timestamp (ISO 8601)
+    - level (INFO, ERROR, etc)
+    - logger_name
+    - trace_id (si existe)
+    - environment (production, staging, dev)
+    """
+    
+    def add_fields(self, log_record: Dict[str, Any], record: logging.LogRecord, message_dict: Dict[str, Any]) -> None:
+        super().add_fields(log_record, record, message_dict)
+        
+        # Timestamp ISO 8601
+        log_record['timestamp'] = datetime.utcnow().isoformat() + 'Z'
+        
+        # Level name
+        log_record['level'] = record.levelname
+        
+        # Logger name
+        log_record['logger'] = record.name
+        
+        # Environment
+        from src.config import settings
+        log_record['environment'] = settings.ENVIRONMENT
+        
+        # Request context (si existe)
+        if hasattr(record, 'request_id'):
+            log_record['request_id'] = record.request_id
+        
+        if hasattr(record, 'trace_id'):
+            log_record['trace_id'] = record.trace_id
+        
+        # Extra fields
+        if hasattr(record, 'user_id'):
+            log_record['user_id'] = record.user_id
+        
+        if hasattr(record, 'source'):
+            log_record['source'] = record.source
+
+
+def setup_logging(log_level: str = "INFO") -> logging.Logger:
+    """
+    Configura logging estructurado para toda la aplicación.
+    
+    Returns:
+        Logger configurado con JSON formatter
+    """
+    # Root logger
+    logger = logging.getLogger()
+    logger.setLevel(log_level)
+    
+    # Remove default handlers
+    logger.handlers = []
+    
+    # Console handler con JSON formatter
+    console_handler = logging.StreamHandler(sys.stdout)
+    
+    # JSON formatter
+    formatter = CustomJsonFormatter(
+        '%(timestamp)s %(level)s %(logger)s %(message)s'
+    )
+    console_handler.setFormatter(formatter)
+    
+    logger.addHandler(console_handler)
+    
+    return logger
+
+
+# Global logger instance
+logger = setup_logging()
+```
+
+---
+
+**Uso en código:**
+
+```python
+# src/application/use_cases/sync_uber.py
+
+import logging
+from src.infrastructure.logging.logger import logger
+
+# Add context to logger
+log = logging.LoggerAdapter(logger, {
+    'source': 'uber',
+    'use_case': 'sync_trips'
+})
+
+
+async def sync_uber_trips(date: str):
+    """Sincroniza trips de Uber con logging estructurado"""
+    
+    # Log inicio
+    log.info(
+        "Starting Uber sync",
+        extra={
+            'date': date,
+            'action': 'sync_start'
+        }
+    )
+    
+    try:
+        trips = await uber_connector.fetch_trips(date)
+        
+        # Log éxito
+        log.info(
+            "Uber sync completed successfully",
+            extra={
+                'date': date,
+                'trips_count': len(trips),
+                'action': 'sync_success'
+            }
+        )
+        
+        return trips
+        
+    except RateLimitError as e:
+        # Log rate limit (WARNING)
+        log.warning(
+            "Uber API rate limit hit",
+            extra={
+                'date': date,
+                'retry_after': e.retry_after,
+                'action': 'rate_limit_hit'
+            }
+        )
+        raise
+        
+    except Exception as e:
+        # Log error con stack trace
+        log.error(
+            "Uber sync failed",
+            extra={
+                'date': date,
+                'error_type': type(e).__name__,
+                'error_message': str(e),
+                'action': 'sync_failed'
+            },
+            exc_info=True  # Include stack trace
+        )
+        raise
+```
+
+**Output JSON (ejemplo):**
+
+```json
+{
+  "timestamp": "2026-01-27T10:30:45.123Z",
+  "level": "INFO",
+  "logger": "src.application.use_cases.sync_uber",
+  "message": "Starting Uber sync",
+  "environment": "production",
+  "source": "uber",
+  "use_case": "sync_trips",
+  "date": "2026-01-26",
+  "action": "sync_start"
+}
+
+{
+  "timestamp": "2026-01-27T10:30:52.456Z",
+  "level": "INFO",
+  "logger": "src.application.use_cases.sync_uber",
+  "message": "Uber sync completed successfully",
+  "environment": "production",
+  "source": "uber",
+  "use_case": "sync_trips",
+  "date": "2026-01-26",
+  "trips_count": 12,
+  "action": "sync_success"
+}
+```
+
+---
+
+**FastAPI Middleware para Request ID:**
+
+```python
+# src/api/middleware.py
+
+import uuid
+from fastapi import Request
+from starlette.middleware.base import BaseHTTPMiddleware
+import logging
+
+logger = logging.getLogger(__name__)
+
+
+class RequestLoggingMiddleware(BaseHTTPMiddleware):
+    """
+    Middleware que añade request_id a cada request y lo logea.
+    """
+    
+    async def dispatch(self, request: Request, call_next):
+        # Generate request ID
+        request_id = str(uuid.uuid4())
+        
+        # Add to request state
+        request.state.request_id = request_id
+        
+        # Log request
+        logger.info(
+            "Incoming request",
+            extra={
+                'request_id': request_id,
+                'method': request.method,
+                'path': request.url.path,
+                'client_host': request.client.host if request.client else None,
+                'action': 'request_start'
+            }
+        )
+        
+        # Process request
+        response = await call_next(request)
+        
+        # Log response
+        logger.info(
+            "Request completed",
+            extra={
+                'request_id': request_id,
+                'method': request.method,
+                'path': request.url.path,
+                'status_code': response.status_code,
+                'action': 'request_end'
+            }
+        )
+        
+        # Add request_id to response headers
+        response.headers['X-Request-ID'] = request_id
+        
+        return response
+```
+
+**Activar en FastAPI:**
+
+```python
+# src/main.py
+
+from fastapi import FastAPI
+from src.api.middleware import RequestLoggingMiddleware
+from src.infrastructure.logging.logger import setup_logging
+
+# Setup logging
+setup_logging(log_level="INFO")
+
+app = FastAPI()
+
+# Add middleware
+app.add_middleware(RequestLoggingMiddleware)
+```
+
+---
+
+**Búsquedas en Loki/Grafana:**
+
+```logql
+# Todos los errores de sync en últimas 24h
+{environment="production"} | json | level="ERROR" | action=~"sync_.*"
+
+# Rate limits de Uber
+{environment="production"} | json | source="uber" | action="rate_limit_hit"
+
+# Requests lentos (>5s)
+{environment="production"} | json | action="request_end" | duration > 5000
+
+# Errores por source
+sum by (source) (
+  count_over_time({environment="production"} | json | level="ERROR" [24h])
+)
+```
+
+---
+
+### 13.5 Zero-Downtime Deploy Strategy
+
+**Objetivo**: Deployar nueva versión SIN interrumpir el servicio activo.
+
+**Estrategia: Rolling Update con Health Checks**
+
+#### 13.5.1 Docker Compose con Healthchecks Mejorados
+
+**`docker-compose.prod.yml`**
+
+```yaml
+version: '3.8'
+
+services:
+  api:
+    image: ghcr.io/ivantintore/taxi2:${VERSION}
+    deploy:
+      replicas: 2  # Dos instancias para HA
+      update_config:
+        parallelism: 1        # Actualizar de 1 en 1
+        delay: 10s            # Esperar 10s entre actualizaciones
+        order: start-first    # Iniciar nueva antes de parar vieja
+        failure_action: rollback
+      rollback_config:
+        parallelism: 1
+        delay: 5s
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
+    environment:
+      - GRACEFUL_SHUTDOWN_TIMEOUT=30  # Espera requests en curso
+```
+
+**Configuración de Graceful Shutdown en FastAPI:**
+
+```python
+# src/main.py
+
+import signal
+import asyncio
+from fastapi import FastAPI
+from contextlib import asynccontextmanager
+
+shutdown_event = asyncio.Event()
+
+
+def handle_shutdown_signal(signum, frame):
+    """Handler para SIGTERM/SIGINT"""
+    logger.info("Shutdown signal received, starting graceful shutdown...")
+    shutdown_event.set()
+
+
+# Register signal handlers
+signal.signal(signal.SIGTERM, handle_shutdown_signal)
+signal.signal(signal.SIGINT, handle_shutdown_signal)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Lifespan events"""
+    # Startup
+    logger.info("Application starting up")
+    yield
+    
+    # Shutdown
+    logger.info("Application shutting down gracefully")
+    
+    # Wait for in-flight requests (max 30s)
+    await asyncio.wait_for(
+        shutdown_event.wait(),
+        timeout=30.0
+    )
+    
+    logger.info("All requests completed, shutdown complete")
+
+
+app = FastAPI(lifespan=lifespan)
+```
+
+---
+
+#### 13.5.2 Script de Deploy con Zero-Downtime
+
+**`scripts/deploy.sh`**
+
+```bash
+#!/bin/bash
+
+# Zero-Downtime Deploy Script
+# Usage: ./scripts/deploy.sh [version]
+
+set -e
+
+VERSION=${1:-latest}
+HEALTH_ENDPOINT="https://api.taxi.yourdomain.com/health"
+MAX_HEALTH_CHECKS=30
+HEALTH_CHECK_INTERVAL=2
+
+echo "🚀 ZERO-DOWNTIME DEPLOY"
+echo "=================================="
+echo "Version: $VERSION"
+echo ""
+
+# 1. Pre-deploy checks
+echo "1️⃣  Pre-deploy checks..."
+
+# Check current version is healthy
+HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" $HEALTH_ENDPOINT)
+if [ "$HTTP_CODE" != "200" ]; then
+  echo "❌ Current version is unhealthy (HTTP $HTTP_CODE)"
+  echo "   Aborting deploy to prevent further issues"
+  exit 1
+fi
+echo "  ✅ Current version is healthy"
+
+# 2. Pull new image
+echo ""
+echo "2️⃣  Pulling new Docker image..."
+docker pull ghcr.io/ivantintore/taxi2:$VERSION
+
+# 3. Database migrations (if needed)
+echo ""
+echo "3️⃣  Running database migrations..."
+docker-compose run --rm api alembic upgrade head
+
+# 4. Start new container (blue-green style)
+echo ""
+echo "4️⃣  Starting new version (blue-green)..."
+
+# Export version for docker-compose
+export VERSION=$VERSION
+
+# Start new instance (will run alongside old one temporarily)
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d --no-deps --scale api=2 --no-recreate api
+
+# 5. Wait for new instance to be healthy
+echo ""
+echo "5️⃣  Waiting for new instance to be healthy..."
+
+NEW_CONTAINER_ID=$(docker ps --filter "name=taxi-api" --format "{{.ID}}" | head -1)
+
+for i in $(seq 1 $MAX_HEALTH_CHECKS); do
+  HEALTH=$(docker exec $NEW_CONTAINER_ID curl -s http://localhost:8000/health | jq -r '.status // "unhealthy"')
+  
+  if [ "$HEALTH" = "healthy" ]; then
+    echo "  ✅ New instance is healthy (check $i/$MAX_HEALTH_CHECKS)"
+    break
+  fi
+  
+  if [ $i -eq $MAX_HEALTH_CHECKS ]; then
+    echo "  ❌ New instance failed health checks"
+    echo "  Rolling back..."
+    docker stop $NEW_CONTAINER_ID
+    docker rm $NEW_CONTAINER_ID
+    exit 1
+  fi
+  
+  echo "  ⏳ Health check $i/$MAX_HEALTH_CHECKS (status: $HEALTH)"
+  sleep $HEALTH_CHECK_INTERVAL
+done
+
+# 6. Smoke tests on new instance
+echo ""
+echo "6️⃣  Running smoke tests on new instance..."
+
+# Test against new container directly
+NEW_PORT=$(docker port $NEW_CONTAINER_ID 8000 | cut -d: -f2)
+./scripts/smoke_tests.sh "http://localhost:$NEW_PORT"
+
+# 7. Gracefully stop old instances
+echo ""
+echo "7️⃣  Gracefully stopping old instances..."
+
+OLD_CONTAINERS=$(docker ps --filter "name=taxi-api" --format "{{.ID}}" | tail -n +2)
+
+for container in $OLD_CONTAINERS; do
+  echo "  Sending SIGTERM to $container..."
+  docker kill --signal=SIGTERM $container
+  
+  # Wait for graceful shutdown (max 30s)
+  for i in $(seq 1 15); do
+    if ! docker ps -q --filter "id=$container" | grep -q .; then
+      echo "  ✅ Container $container stopped gracefully"
+      break
+    fi
+    sleep 2
+  done
+  
+  # Force kill if still running
+  if docker ps -q --filter "id=$container" | grep -q .; then
+    echo "  ⚠️  Force killing $container (timeout)"
+    docker kill $container
+  fi
+  
+  docker rm $container
+done
+
+# 8. Final health check
+echo ""
+echo "8️⃣  Final health check..."
+
+sleep 5
+
+HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" $HEALTH_ENDPOINT)
+if [ "$HTTP_CODE" != "200" ]; then
+  echo "❌ Deploy verification failed (HTTP $HTTP_CODE)"
+  exit 1
+fi
+
+# 9. Cleanup old images
+echo ""
+echo "9️⃣  Cleaning up old Docker images..."
+docker image prune -f
+
+echo ""
+echo "=================================="
+echo "✅ ZERO-DOWNTIME DEPLOY SUCCESSFUL"
+echo "Version $VERSION is now live"
+echo ""
+echo "📊 Monitoring:"
+echo "  - Logs: docker-compose logs -f api"
+echo "  - Metrics: https://grafana.taxi.yourdomain.com"
+echo "  - Health: $HEALTH_ENDPOINT"
+```
+
+---
+
+#### 13.5.3 Improved Health Check Endpoint
+
+**`src/api/routes/health.py`**
+
+```python
+from fastapi import APIRouter, status
+from pydantic import BaseModel
+from typing import Dict, Any
+import asyncpg
+import redis.asyncio as redis
+from datetime import datetime
+
+from src.infrastructure.database.connection import engine
+from src.config import settings
+
+router = APIRouter(tags=["health"])
+
+
+class HealthResponse(BaseModel):
+    status: str  # "healthy" | "degraded" | "unhealthy"
+    timestamp: str
+    version: str
+    checks: Dict[str, Any]
+
+
+@router.get("/health", response_model=HealthResponse)
+async def health_check():
+    """
+    Comprehensive health check.
+    
+    Returns:
+        - 200 if all systems healthy
+        - 503 if any critical system is down
+    """
+    checks = {}
+    overall_status = "healthy"
+    
+    # 1. Database check
+    try:
+        async with engine.connect() as conn:
+            await conn.execute("SELECT 1")
+        checks["database"] = {
+            "status": "ok",
+            "response_time_ms": 5  # Measure actual time
+        }
+    except Exception as e:
+        checks["database"] = {
+            "status": "error",
+            "error": str(e)
+        }
+        overall_status = "unhealthy"
+    
+    # 2. Redis check
+    try:
+        redis_client = redis.from_url(settings.REDIS_URL)
+        await redis_client.ping()
+        await redis_client.close()
+        checks["redis"] = {"status": "ok"}
+    except Exception as e:
+        checks["redis"] = {
+            "status": "error",
+            "error": str(e)
+        }
+        overall_status = "degraded"  # Redis down = degraded, not unhealthy
+    
+    # 3. Celery workers check (optional)
+    try:
+        # Check if workers are running
+        # This is optional, comment out if causing issues
+        checks["celery"] = {"status": "ok"}
+    except:
+        checks["celery"] = {"status": "unknown"}
+    
+    # 4. Disk space check
+    import shutil
+    disk_usage = shutil.disk_usage("/")
+    disk_percent = (disk_usage.used / disk_usage.total) * 100
+    
+    if disk_percent > 90:
+        checks["disk"] = {
+            "status": "warning",
+            "percent_used": round(disk_percent, 2)
+        }
+        overall_status = "degraded" if overall_status == "healthy" else overall_status
+    else:
+        checks["disk"] = {
+            "status": "ok",
+            "percent_used": round(disk_percent, 2)
+        }
+    
+    # Response
+    response = HealthResponse(
+        status=overall_status,
+        timestamp=datetime.utcnow().isoformat() + "Z",
+        version=settings.VERSION,
+        checks=checks
+    )
+    
+    # Return 503 if unhealthy
+    status_code = status.HTTP_200_OK if overall_status != "unhealthy" else status.HTTP_503_SERVICE_UNAVAILABLE
+    
+    return response
+```
+
+**Response ejemplo (healthy):**
+
+```json
+{
+  "status": "healthy",
+  "timestamp": "2026-01-27T10:45:30.123Z",
+  "version": "v1.2.3",
+  "checks": {
+    "database": {
+      "status": "ok",
+      "response_time_ms": 5
+    },
+    "redis": {
+      "status": "ok"
+    },
+    "celery": {
+      "status": "ok"
+    },
+    "disk": {
+      "status": "ok",
+      "percent_used": 45.2
+    }
+  }
+}
+```
+
+---
+
+#### 13.5.4 Monitoring During Deploy
+
+**Script de monitoreo en tiempo real:**
+
+```bash
+#!/bin/bash
+# scripts/monitor_deploy.sh
+
+HEALTH_ENDPOINT="https://api.taxi.yourdomain.com/health"
+
+echo "📊 MONITORING DEPLOY"
+echo "Press Ctrl+C to stop"
+echo ""
+
+while true; do
+  RESPONSE=$(curl -s $HEALTH_ENDPOINT)
+  STATUS=$(echo $RESPONSE | jq -r '.status')
+  VERSION=$(echo $RESPONSE | jq -r '.version')
+  DB_STATUS=$(echo $RESPONSE | jq -r '.checks.database.status')
+  
+  TIMESTAMP=$(date '+%H:%M:%S')
+  
+  if [ "$STATUS" = "healthy" ]; then
+    echo "[$TIMESTAMP] ✅ Status: $STATUS | Version: $VERSION | DB: $DB_STATUS"
+  elif [ "$STATUS" = "degraded" ]; then
+    echo "[$TIMESTAMP] ⚠️  Status: $STATUS | Version: $VERSION | DB: $DB_STATUS"
+  else
+    echo "[$TIMESTAMP] ❌ Status: $STATUS | Version: $VERSION | DB: $DB_STATUS"
+  fi
+  
+  sleep 2
+done
+```
+
+**Uso durante deploy:**
+
+```bash
+# Terminal 1: Monitoreo
+./scripts/monitor_deploy.sh
+
+# Terminal 2: Deploy
+./scripts/deploy.sh v1.2.3
+
+# Output Terminal 1:
+# [10:45:30] ✅ Status: healthy | Version: v1.2.2 | DB: ok
+# [10:45:32] ✅ Status: healthy | Version: v1.2.2 | DB: ok
+# [10:45:55] ⚠️  Status: degraded | Version: v1.2.3 | DB: ok  ← Nueva instancia iniciando
+# [10:46:05] ✅ Status: healthy | Version: v1.2.3 | DB: ok   ← Deploy completado
+```
+
+---
+
+### 13.6 Debug Playbook
 
 **Problema Común 1: API lento**
 
