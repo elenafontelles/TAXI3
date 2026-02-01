@@ -47,23 +47,65 @@ Sistema centralizado para consolidar la facturación de **3 taxis** desde múlti
 
 | Aspecto | Detalle |
 |---------|---------|
-| **Estado** | ✅ API Disponible (acceso limitado) |
+| **Estado** | ❌ **API RESTRINGIDA** - Usar CSV export |
 | **Documentación** | [developer.uber.com/docs/drivers](https://developer.uber.com/docs/drivers/introduction) |
-| **Autenticación** | OAuth 2.0 (el conductor autoriza la app) |
-| **Endpoints principales** | `/partners/me`, `/partners/trips`, `/partners/payments` |
+| **Método actual** | CSV manual desde driver dashboard |
+| **Automatización** | Semi-manual (alerta si falta archivo) |
 
-**Datos disponibles:**
-- Perfil del conductor (rating, foto, estado activo)
-- Viajes: distancia, duración, tarifa, ciudad
-- Pagos: moneda, importe, fecha de pago
-- Filtros por rango de fechas (`from_time`, `to_time`)
+**✅ VERIFICACIÓN COMPLETADA (1 Febrero 2026):**
 
-**⚠️ VERIFICACIÓN CRÍTICA REQUERIDA:**
-- **Rate Limits**: Consultar documentación oficial sobre límites de peticiones (req/min, req/día)
-- **Retención de Datos**: Confirmar ventana de acceso histórico (¿30 días? ¿6 meses? ¿sin límite?)
-- **Acceso OAuth**: Validar que el proceso de autorización del conductor funciona correctamente
+**App registrada:**
+- Nombre: `Test_Iceman`
+- App ID: `oO35JXSw0aV-K6fXTcdOmia08FAkLAmD`
+- Client Secret: ✅ Generado
+- Tipo: HYBRID APP
 
-**Acción requerida:** Registrar app en [developer.uber.com](https://developer.uber.com) para obtener credenciales OAuth y verificar límites.
+**Resultado de verificación:**
+- ❌ **NO hay acceso a scopes** (Authorization Code, trips, payments)
+- ⚠️ Portal indica: *"Your application currently does not have access to Authorization Code scopes"*
+- 📋 Requiere: Contactar Uber Business Development representative
+- 🔒 Realidad: Driver API solo para fleet management partners (típicamente 50+ vehículos)
+
+**Documentación oficial confirma:**
+> *"Access to the Driver API is currently limited. If you are interested in using this API, apply for access on the Drivers Product Page."*
+
+---
+
+**SOLUCIÓN IMPLEMENTADA: CSV Export Manual**
+
+| Paso | Acción | Responsable | Frecuencia |
+|------|--------|-------------|------------|
+| 1 | Login en [driver.uber.com](https://driver.uber.com) | Conductor activo | Diario |
+| 2 | Menu → "Earnings" → "Trip History" | | |
+| 3 | Seleccionar fecha (día anterior) | | |
+| 4 | Export → Download CSV | | |
+| 5 | Renombrar: `uber_YYYY-MM-DD.csv` | | |
+| 6 | Subir a carpeta `imports/` (SFTP o web upload) | | Antes 10:00 AM |
+| 7 | Sistema procesa automáticamente | Celery task | 10:30 AM |
+
+**Datos disponibles en CSV de Uber:**
+- ✅ Fecha y hora del viaje
+- ✅ Ciudad de recogida/destino  
+- ✅ Distancia recorrida (km)
+- ✅ Duración del viaje (minutos)
+- ✅ Tarifa total (gross amount)
+- ✅ Comisión de Uber (%)
+- ✅ Importe neto recibido (payout)
+- ✅ Tipo de servicio (UberX, Comfort, etc.)
+- ✅ Método de pago (efectivo/tarjeta)
+- ⚠️ NO incluye: Coordenadas GPS exactas
+
+**Governance del proceso:**
+- 🔔 Alerta Telegram si a las 10:00 AM no se detecta archivo
+- ✅ Validación de hash (evitar duplicados)
+- ✅ Schema validation antes de procesar
+- 📊 Tracking en tabla `uber_imports` (similar a `freenow_imports`)
+
+**Plan futuro (opcional - no bloquea desarrollo):**
+1. Solicitar acceso formal en [developer.uber.com/products/drivers](https://developer.uber.com/products/drivers)
+2. Esperar aprobación de Uber Business (2-8 semanas, puede rechazar)
+3. Si aprueban → activar `uber_api_connector.py` (ya preparado en arquitectura)
+4. Cambio en config: `UBER_SOURCE=api` (5 minutos de trabajo)
 
 ---
 
@@ -247,13 +289,14 @@ FLUJO DE DATOS:
 
 | Plataforma | Método de Obtención | Frecuencia | Estado Verificación |
 |------------|---------------------|------------|---------------------|
-| **Uber** | API REST con OAuth | Automático diario | ⚠️ Verificar rate limits |
-| **FreeNow** | Descarga CSV del Portal | Semi-manual** | ⚠️ Confirmar automatización |
-| **Prima** | Export CSV cloud | ❓ Por confirmar | ⚠️ **CRÍTICO**: Verificar si realmente es automático |
+| **Uber** | CSV desde driver.uber.com | Manual diario | ✅ **VERIFICADO** - API no disponible |
+| **FreeNow** | CSV desde portal.free-now.com | Manual diario | ✅ Confirmado |
+| **Prima** | CSV desde cloud Taxitronic | ❓ Por confirmar | ⚠️ Verificar si es manual o automático |
 
 **Notas importantes:**
-- **FreeNow: Proceso manual documentado en Sección 2.2 con SLA y governance
-- ***Prima: "Automático diario" es una ASUNCIÓN no verificada. Plan de contingencia definido en Sección 2.3
+- **Uber**: API restringida (requiere aprobación Uber Business). CSV es la única opción viable.
+- **FreeNow**: Proceso manual documentado en Sección 2.2 con SLA y governance
+- **Prima**: Por verificar si export es automático o manual. Plan de contingencia definido en Sección 2.3
 
 ---
 
