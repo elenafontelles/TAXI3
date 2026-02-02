@@ -92,3 +92,38 @@ class TestVehicleModel:
         assert saved.plate == "1234ABC"
         assert saved.owner_id == owner.id
         assert saved.is_active is True
+
+
+class TestShiftModel:
+    def test_create_shift(self, db_session):
+        from src.models.owner import Owner
+        from src.models.driver import Driver
+        from src.models.vehicle import Vehicle
+        from src.models.shift import Shift
+
+        owner = Owner(name="Ivan", tax_id="12345678A")
+        db_session.add(owner)
+        db_session.commit()
+
+        driver = Driver(name="Driver 1", license_number="LIC001", owner_id=owner.id)
+        vehicle = Vehicle(plate="1234ABC", license_number="T-1234", owner_id=owner.id)
+        db_session.add_all([driver, vehicle])
+        db_session.commit()
+
+        shift = Shift(
+            driver_id=driver.id,
+            vehicle_id=vehicle.id,
+            source="prima",
+            started_at=datetime(2026, 1, 27, 6, 0, tzinfo=timezone.utc),
+            ended_at=datetime(2026, 1, 27, 14, 0, tzinfo=timezone.utc),
+            km_free=50.0,
+            km_occupied=120.0,
+            total_earnings=350.00,
+        )
+        db_session.add(shift)
+        db_session.commit()
+
+        saved = db_session.query(Shift).first()
+        assert saved.source == "prima"
+        assert saved.km_occupied == 120.0
+        assert saved.total_earnings == 350.00
