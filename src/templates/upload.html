@@ -31,18 +31,18 @@
                     </select>
                 </div>
                 <div class="col-md-4">
-                    <label for="driver_id" class="form-label">Conductor</label>
-                    <select class="form-select" id="driver_id" name="driver_id" required>
-                        <option value="">Selecciona conductor</option>
+                    <label for="driver_id" class="form-label">Conductor <span class="text-muted small">(opcional)</span></label>
+                    <select class="form-select" id="driver_id" name="driver_id">
+                        <option value="">Auto-detectar del CSV</option>
                         {% for d in drivers %}
                         <option value="{{ d.id }}">{{ d.name }}</option>
                         {% endfor %}
                     </select>
                 </div>
                 <div class="col-md-4">
-                    <label for="vehicle_id" class="form-label">Vehiculo</label>
-                    <select class="form-select" id="vehicle_id" name="vehicle_id" required>
-                        <option value="">Selecciona vehiculo</option>
+                    <label for="vehicle_id" class="form-label">Vehiculo <span class="text-muted small">(opcional)</span></label>
+                    <select class="form-select" id="vehicle_id" name="vehicle_id">
+                        <option value="">Auto-detectar del CSV</option>
                         {% for v in vehicles %}
                         <option value="{{ v.id }}">{{ v.plate }} - {{ v.brand }} {{ v.model }}</option>
                         {% endfor %}

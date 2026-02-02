@@ -75,5 +75,7 @@ def parse_prima_csv(filepath: str) -> list[dict]:
                     row.get("EndCity", "").strip(),
                 ])) or None,
                 "raw_data": dict(row),
+                "_driver_code": row["DriverName"].strip(),
+                "_license": row["License"].strip(),
             })
     return trips

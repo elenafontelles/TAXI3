@@ -46,5 +46,7 @@ def parse_freenow_csv(filepath: str) -> list[dict]:
                 "origin_address": row["PICKUP LOCATION"].strip() or None,
                 "dest_address": row["DROPOFF LOCATION"].strip() or None,
                 "raw_data": dict(row),
+                "_driver_name": f"{row['DRIVER FIRST NAME'].strip()} {row['DRIVER LAST NAME'].strip()}",
+                "_plate": row["LICENCE PLATE"].strip(),
             })
     return trips
