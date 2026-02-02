@@ -66,3 +66,29 @@ class TestDriverModel:
         assert saved.owner_id == owner.id
         assert saved.is_owner is False
         assert saved.is_active is True
+
+
+class TestVehicleModel:
+    def test_create_vehicle(self, db_session):
+        from src.models.owner import Owner
+        from src.models.vehicle import Vehicle
+
+        owner = Owner(name="Ivan Tintore", tax_id="12345678A")
+        db_session.add(owner)
+        db_session.commit()
+
+        vehicle = Vehicle(
+            plate="1234ABC",
+            license_number="T-1234",
+            brand="Toyota",
+            model="Prius",
+            year=2022,
+            owner_id=owner.id,
+        )
+        db_session.add(vehicle)
+        db_session.commit()
+
+        saved = db_session.query(Vehicle).first()
+        assert saved.plate == "1234ABC"
+        assert saved.owner_id == owner.id
+        assert saved.is_active is True
