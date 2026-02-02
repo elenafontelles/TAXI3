@@ -26,7 +26,7 @@ PARSERS = {
 
 TRIP_FIELDS = {
     "source", "external_id", "started_at", "ended_at", "gross_amount",
-    "commission", "tips", "tolls", "payout_amount", "payment_method",
+    "commission", "taxes_vat", "tips", "tolls", "payout_amount", "payment_method",
     "distance_km", "duration_minutes", "origin_address", "dest_address",
     "origin_lat", "origin_lng", "dest_lat", "dest_lng", "tariff_code",
 }

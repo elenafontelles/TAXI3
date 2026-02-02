@@ -4,11 +4,10 @@ from datetime import datetime
 
 
 def parse_freenow_csv(filepath: str) -> list[dict]:
-    """Parse FreeNow driver CSV export into normalized trip dicts.
+    """Parse FreeNow booking record CSV export.
 
-    Expected columns: Booking ID, Date, Time, Pickup, Dropoff,
-                      Distance (km), Duration (min), Fare (EUR),
-                      Commission (EUR), Net (EUR)
+    Real format: comma-separated, ISO 8601 dates with timezone,
+    dot decimals. Only imports ACCOMPLISHED bookings.
 
     Returns a list of dicts ready for Trip model creation.
     """
@@ -16,22 +15,36 @@ def parse_freenow_csv(filepath: str) -> list[dict]:
     with open(filepath, newline="", encoding="utf-8") as f:
         reader = csv.DictReader(f)
         for row in reader:
-            date_str = row["Date"].strip()
-            time_str = row["Time"].strip()
-            started_at = datetime.strptime(f"{date_str} {time_str}", "%Y-%m-%d %H:%M")
+            if row["BOOKING STATE"].strip() != "ACCOMPLISHED":
+                continue
+
+            gross = float(row["TOUR VALUE"].strip())
+            tips = float(row["TOUR TIP"].strip())
+            tolls = float(row["TOLL VALUE"].strip())
+            tax_pct = float(row["TAX PERCENTAGE"].strip())
+
+            started_at = datetime.fromisoformat(row["PICKUP DATE"].strip())
+            ended_at = datetime.fromisoformat(row["CLOSED DATE"].strip())
+            duration = (ended_at - started_at).total_seconds() / 60
+
+            payment_raw = row["PAYMENT METHOD"].strip().lower()
+            payment = "efectivo" if payment_raw == "cash" else "tarjeta"
 
             trips.append({
                 "source": "freenow",
-                "external_id": row["Booking ID"].strip(),
+                "external_id": row["BOOKING ID"].strip(),
                 "started_at": started_at,
-                "gross_amount": float(row["Fare (EUR)"].strip()),
-                "commission": float(row["Commission (EUR)"].strip()),
-                "payout_amount": float(row["Net (EUR)"].strip()),
-                "distance_km": float(row["Distance (km)"].strip()),
-                "duration_minutes": float(row["Duration (min)"].strip()),
-                "origin_address": row["Pickup"].strip(),
-                "dest_address": row["Dropoff"].strip(),
-                "payment_method": "card",
+                "ended_at": ended_at,
+                "duration_minutes": round(duration, 2),
+                "gross_amount": gross,
+                "commission": 0,
+                "taxes_vat": round(gross * tax_pct / 100, 2) if tax_pct else 0,
+                "tips": tips,
+                "tolls": tolls,
+                "payout_amount": gross,
+                "payment_method": payment,
+                "origin_address": row["PICKUP LOCATION"].strip() or None,
+                "dest_address": row["DROPOFF LOCATION"].strip() or None,
                 "raw_data": dict(row),
             })
     return trips
