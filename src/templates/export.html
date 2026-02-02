@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}Exportar - TAXI API{% endblock %}
+{% block content %}
+<h4>Exportar Datos</h4>
+<div class="card">
+    <div class="card-body">
+        <p class="text-muted">Selecciona el rango de fechas y formato para exportar los datos fiscales.</p>
+        <form method="post" action="/export/download">
+            <div class="row mb-3">
+                <div class="col-md-4">
+                    <label for="date_from" class="form-label">Desde</label>
+                    <input type="date" class="form-control" id="date_from" name="date_from" required>
+                </div>
+                <div class="col-md-4">
+                    <label for="date_to" class="form-label">Hasta</label>
+                    <input type="date" class="form-control" id="date_to" name="date_to" required>
+                </div>
+                <div class="col-md-4">
+                    <label for="format" class="form-label">Formato</label>
+                    <select class="form-select" id="format" name="format">
+                        <option value="csv">CSV</option>
+                        <option value="excel">Excel</option>
+                    </select>
+                </div>
+            </div>
+            <div class="row mb-3">
+                <div class="col-md-4">
+                    <label for="driver_filter" class="form-label">Conductor</label>
+                    <select class="form-select" id="driver_filter" name="driver_id">
+                        <option value="">Todos los conductores</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label for="report_type" class="form-label">Tipo de informe</label>
+                    <select class="form-select" id="report_type" name="report_type">
+                        <option value="trips">Viajes detallados</option>
+                        <option value="summary">Resumen diario</option>
+                        <option value="tax">Informe fiscal</option>
+                    </select>
+                </div>
+            </div>
+            <button type="submit" class="btn btn-success">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-download me-1" viewBox="0 0 16 16">
+                    <path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5"/>
+                    <path d="M7.646 11.854a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 10.293V1.5a.5.5 0 0 0-1 0v8.793L5.354 8.146a.5.5 0 1 0-.708.708z"/>
+                </svg>
+                Descargar
+            </button>
+        </form>
+    </div>
+</div>
+{% endblock %}
