@@ -1,0 +1,4 @@
+Booking ID,Date,Time,Pickup,Dropoff,Distance (km),Duration (min),Fare (EUR),Commission (EUR),Net (EUR)
+FN001,2026-01-27,09:00,Placa Catalunya,Sagrada Familia,3.2,12,12.50,1.88,10.62
+FN002,2026-01-27,11:30,Estacio Sants,Barceloneta,4.5,18,16.00,2.40,13.60
+FN003,2026-01-27,16:00,Hospital Clinic,Diagonal,2.1,8,9.00,1.35,7.65
