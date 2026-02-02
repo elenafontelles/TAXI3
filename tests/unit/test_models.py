@@ -127,3 +127,60 @@ class TestShiftModel:
         assert saved.source == "prima"
         assert saved.km_occupied == 120.0
         assert saved.total_earnings == 350.00
+
+
+class TestTripModel:
+    def test_create_trip(self, db_session):
+        from src.models.owner import Owner
+        from src.models.driver import Driver
+        from src.models.vehicle import Vehicle
+        from src.models.trip import Trip
+
+        owner = Owner(name="Ivan", tax_id="12345678A")
+        db_session.add(owner)
+        db_session.commit()
+
+        driver = Driver(name="Driver 1", license_number="LIC001", owner_id=owner.id)
+        vehicle = Vehicle(plate="1234ABC", license_number="T-1234", owner_id=owner.id)
+        db_session.add_all([driver, vehicle])
+        db_session.commit()
+
+        trip = Trip(
+            source="uber",
+            external_id="uber_trip_001",
+            driver_id=driver.id,
+            vehicle_id=vehicle.id,
+            started_at=datetime(2026, 1, 27, 10, 30, tzinfo=timezone.utc),
+            gross_amount=25.50,
+            commission=5.10,
+            payout_amount=20.40,
+            payment_method="card",
+        )
+        db_session.add(trip)
+        db_session.commit()
+
+        saved = db_session.query(Trip).first()
+        assert saved.source == "uber"
+        assert saved.external_id == "uber_trip_001"
+        assert float(saved.gross_amount) == 25.50
+        assert float(saved.payout_amount) == 20.40
+
+    def test_trip_requires_source_and_amount(self, db_session):
+        from src.models.owner import Owner
+        from src.models.driver import Driver
+        from src.models.vehicle import Vehicle
+        from src.models.trip import Trip
+
+        owner = Owner(name="Ivan", tax_id="99999999Z")
+        db_session.add(owner)
+        db_session.commit()
+
+        driver = Driver(name="D2", license_number="LIC999", owner_id=owner.id)
+        vehicle = Vehicle(plate="9999ZZZ", license_number="T-9999", owner_id=owner.id)
+        db_session.add_all([driver, vehicle])
+        db_session.commit()
+
+        with pytest.raises(Exception):
+            trip = Trip(driver_id=driver.id, vehicle_id=vehicle.id)
+            db_session.add(trip)
+            db_session.commit()
