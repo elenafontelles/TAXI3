@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Viajes - TAXI API{% endblock %}
+{% block content %}
+<h4>Viajes</h4>
+<div class="card">
+    <div class="card-body">
+        <div class="row mb-3">
+            <div class="col-md-3">
+                <input type="date" class="form-control" id="date_from" placeholder="Desde">
+            </div>
+            <div class="col-md-3">
+                <input type="date" class="form-control" id="date_to" placeholder="Hasta">
+            </div>
+            <div class="col-md-3">
+                <select class="form-select" id="source">
+                    <option value="">Todas las plataformas</option>
+                    <option value="uber">Uber</option>
+                    <option value="freenow">FreeNow</option>
+                    <option value="prima">Prima</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <button class="btn btn-primary">Filtrar</button>
+            </div>
+        </div>
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>Fecha</th>
+                    <th>Plataforma</th>
+                    <th>Conductor</th>
+                    <th>Bruto</th>
+                    <th>Neto</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for trip in trips %}
+                <tr>
+                    <td>{{ trip.started_at }}</td>
+                    <td>{{ trip.source }}</td>
+                    <td>{{ trip.driver_name }}</td>
+                    <td>{{ trip.gross_amount }} EUR</td>
+                    <td>{{ trip.payout_amount }} EUR</td>
+                </tr>
+                {% endfor %}
+                {% if not trips %}
+                <tr><td colspan="5" class="text-center text-muted">No hay viajes</td></tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
