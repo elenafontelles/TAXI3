@@ -13,7 +13,6 @@ from scripts.parsers.uber_parser import parse_uber_csv
 from scripts.parsers.freenow_parser import parse_freenow_csv
 from scripts.parsers.prima_parser import parse_prima_csv
 from src.models.trip import Trip
-from src.models.shift import Shift
 
 router = APIRouter()
 templates_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "templates")
@@ -26,14 +25,10 @@ PARSERS = {
 }
 
 TRIP_FIELDS = {
-    "source", "external_id", "started_at", "gross_amount", "commission",
-    "tips", "tolls", "payout_amount", "payment_method", "distance_km",
-    "duration_minutes", "origin_address", "dest_address",
-}
-
-SHIFT_FIELDS = {
-    "source", "external_id", "started_at", "ended_at",
-    "km_free", "km_occupied", "total_earnings",
+    "source", "external_id", "started_at", "ended_at", "gross_amount",
+    "commission", "tips", "tolls", "payout_amount", "payment_method",
+    "distance_km", "duration_minutes", "origin_address", "dest_address",
+    "origin_lat", "origin_lng", "dest_lat", "dest_lng", "tariff_code",
 }
 
 
@@ -87,26 +82,15 @@ async def process_upload(
     created = 0
     skipped = 0
 
-    if platform == "prima":
-        for s in records:
-            existing = session.query(Shift).filter_by(external_id=s["external_id"]).first()
-            if existing:
-                skipped += 1
-                continue
-            model_data = {k: v for k, v in s.items() if k in SHIFT_FIELDS}
-            shift = Shift(driver_id=driver_id, vehicle_id=vehicle_id, raw_data=s.get("raw_data"), **model_data)
-            session.add(shift)
-            created += 1
-    else:
-        for t in records:
-            existing = session.query(Trip).filter_by(external_id=t["external_id"]).first()
-            if existing:
-                skipped += 1
-                continue
-            model_data = {k: v for k, v in t.items() if k in TRIP_FIELDS}
-            trip = Trip(driver_id=driver_id, vehicle_id=vehicle_id, raw_data=t.get("raw_data"), **model_data)
-            session.add(trip)
-            created += 1
+    for t in records:
+        existing = session.query(Trip).filter_by(external_id=t["external_id"], source=t["source"]).first()
+        if existing:
+            skipped += 1
+            continue
+        model_data = {k: v for k, v in t.items() if k in TRIP_FIELDS}
+        trip = Trip(driver_id=driver_id, vehicle_id=vehicle_id, raw_data=t.get("raw_data"), **model_data)
+        session.add(trip)
+        created += 1
 
     session.commit()
 

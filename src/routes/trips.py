@@ -1,5 +1,6 @@
 # src/routes/trips.py
 import os
+import math
 from fastapi import APIRouter, Request, Depends, Query
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
@@ -15,15 +16,24 @@ templates = Jinja2Templates(directory=templates_dir)
 
 
 @router.get("/trips", response_class=HTMLResponse)
-async def trips_page(request: Request, source: str = Query(None), session: Session = Depends(get_session)):
+async def trips_page(
+    request: Request,
+    source: str = Query(None),
+    page: int = Query(1, ge=1),
+    session: Session = Depends(get_session),
+):
     user = get_current_user(request)
     if not user:
         return RedirectResponse(url="/login", status_code=303)
 
     driver_id = user["sub"] if user.get("role") == "driver" else None
-    trips_raw = get_trips_list(session, driver_id=driver_id, source=source if source else None)
+    per_page = 50
+    trips_raw, total = get_trips_list(
+        session, driver_id=driver_id, source=source if source else None,
+        page=page, per_page=per_page,
+    )
+    total_pages = math.ceil(total / per_page) if total else 1
 
-    # Build display data with driver names
     driver_cache = {}
     trips = []
     for t in trips_raw:
@@ -41,5 +51,8 @@ async def trips_page(request: Request, source: str = Query(None), session: Sessi
     return templates.TemplateResponse(request, "trips.html", {
         "user": user,
         "trips": trips,
+        "total": total,
+        "page": page,
+        "total_pages": total_pages,
         "selected_source": source or "",
     })

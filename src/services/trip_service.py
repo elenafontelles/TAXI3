@@ -46,11 +46,22 @@ def get_earnings_summary(session: Session, driver_id: str | None = None) -> dict
     }
 
 
-def get_trips_list(session: Session, driver_id: str | None = None, source: str | None = None) -> list:
-    """Get all trips, optionally filtered."""
+def get_trips_list(
+    session: Session,
+    driver_id: str | None = None,
+    source: str | None = None,
+    page: int = 1,
+    per_page: int = 50,
+) -> tuple[list, int]:
+    """Get trips with pagination, optionally filtered.
+
+    Returns (trips, total_count).
+    """
     q = session.query(Trip).order_by(Trip.started_at.desc())
     if driver_id:
         q = q.filter(Trip.driver_id == driver_id)
     if source:
         q = q.filter(Trip.source == source)
-    return q.limit(100).all()
+    total = q.count()
+    trips = q.offset((page - 1) * per_page).limit(per_page).all()
+    return trips, total

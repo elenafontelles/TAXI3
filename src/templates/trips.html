@@ -42,7 +42,26 @@
                 {% endif %}
             </tbody>
         </table>
-        <p class="text-muted mt-2">{{ trips|length }} viajes</p>
+        <div class="d-flex justify-content-between align-items-center mt-2">
+            <p class="text-muted mb-0">{{ total }} viajes en total</p>
+            {% if total_pages > 1 %}
+            <nav>
+                <ul class="pagination pagination-sm mb-0">
+                    <li class="page-item {{ 'disabled' if page <= 1 }}">
+                        <a class="page-link" href="/trips?page={{ page - 1 }}{{ '&source=' + selected_source if selected_source }}">Anterior</a>
+                    </li>
+                    {% for p in range(1, total_pages + 1) %}
+                    <li class="page-item {{ 'active' if p == page }}">
+                        <a class="page-link" href="/trips?page={{ p }}{{ '&source=' + selected_source if selected_source }}">{{ p }}</a>
+                    </li>
+                    {% endfor %}
+                    <li class="page-item {{ 'disabled' if page >= total_pages }}">
+                        <a class="page-link" href="/trips?page={{ page + 1 }}{{ '&source=' + selected_source if selected_source }}">Siguiente</a>
+                    </li>
+                </ul>
+            </nav>
+            {% endif %}
+        </div>
     </div>
 </div>
 {% endblock %}
