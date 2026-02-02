@@ -6,6 +6,7 @@ from fastapi.staticfiles import StaticFiles
 from src.config import get_settings
 from src.routes.auth import router as auth_router
 from src.routes.dashboard import router as dashboard_router
+from src.routes.trips import router as trips_router
 
 settings = get_settings()
 
@@ -18,6 +19,7 @@ if os.path.isdir(static_dir):
 
 app.include_router(auth_router)
 app.include_router(dashboard_router)
+app.include_router(trips_router)
 
 
 @app.get("/health")
