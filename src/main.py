@@ -1,11 +1,11 @@
 # src/main.py
 import os
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import RedirectResponse
 from src.config import get_settings
-from src.routes.auth import router as auth_router, get_current_user
+from src.routes.auth import router as auth_router
+from src.routes.dashboard import router as dashboard_router
 
 settings = get_settings()
 
@@ -17,16 +17,9 @@ if os.path.isdir(static_dir):
     app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
 app.include_router(auth_router)
+app.include_router(dashboard_router)
 
 
 @app.get("/health")
 async def health():
     return {"status": "healthy", "version": "1.0.0", "app": settings.APP_NAME}
-
-
-@app.get("/")
-async def home(request: Request):
-    user = get_current_user(request)
-    if not user:
-        return RedirectResponse(url="/login", status_code=303)
-    return {"message": f"Welcome {user['name']}"}

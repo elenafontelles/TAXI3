@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}Dashboard - TAXI API{% endblock %}
+{% block content %}
+<h4>Hoy</h4>
+<div class="row mb-4">
+    <div class="col-md-4">
+        <div class="card text-white bg-primary">
+            <div class="card-body">
+                <h6 class="card-title">Hoy</h6>
+                <h3>0.00 EUR</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card text-white bg-success">
+            <div class="card-body">
+                <h6 class="card-title">Esta Semana</h6>
+                <h3>0.00 EUR</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card text-white bg-info">
+            <div class="card-body">
+                <h6 class="card-title">Este Mes</h6>
+                <h3>0.00 EUR</h3>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-body">
+        <canvas id="earningsChart"></canvas>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+const ctx = document.getElementById('earningsChart').getContext('2d');
+new Chart(ctx, {
+    type: 'bar',
+    data: {
+        labels: ['Lun', 'Mar', 'Mie', 'Jue', 'Vie', 'Sab', 'Dom'],
+        datasets: [{
+            label: 'Ingresos Diarios (EUR)',
+            data: [0, 0, 0, 0, 0, 0, 0],
+            backgroundColor: 'rgba(54, 162, 235, 0.5)',
+        }]
+    }
+});
+</script>
+{% endblock %}
