@@ -184,3 +184,58 @@ class TestTripModel:
             trip = Trip(driver_id=driver.id, vehicle_id=vehicle.id)
             db_session.add(trip)
             db_session.commit()
+
+
+class TestSyncLogModel:
+    def test_create_sync_log(self, db_session):
+        from src.models.sync_log import SyncLog
+
+        log = SyncLog(
+            source="uber",
+            sync_type="full",
+            status="completed",
+            records_found=10,
+            records_created=8,
+            records_skipped=2,
+            started_at=datetime(2026, 1, 27, 2, 0, tzinfo=timezone.utc),
+            completed_at=datetime(2026, 1, 27, 2, 5, tzinfo=timezone.utc),
+            duration_seconds=300.0,
+        )
+        db_session.add(log)
+        db_session.commit()
+
+        saved = db_session.query(SyncLog).first()
+        assert saved.source == "uber"
+        assert saved.records_created == 8
+
+
+class TestDailySummaryModel:
+    def test_create_daily_summary(self, db_session):
+        from src.models.owner import Owner
+        from src.models.driver import Driver
+        from src.models.vehicle import Vehicle
+        from src.models.daily_summary import DailySummary
+
+        owner = Owner(name="Ivan", tax_id="11111111A")
+        db_session.add(owner)
+        db_session.commit()
+
+        driver = Driver(name="D1", license_number="LICDS01", owner_id=owner.id)
+        vehicle = Vehicle(plate="DS01ABC", license_number="T-DS01", owner_id=owner.id)
+        db_session.add_all([driver, vehicle])
+        db_session.commit()
+
+        summary = DailySummary(
+            date=date(2026, 1, 27),
+            driver_id=driver.id,
+            vehicle_id=vehicle.id,
+            total_trips=15,
+            total_gross=450.00,
+            total_net=380.00,
+        )
+        db_session.add(summary)
+        db_session.commit()
+
+        saved = db_session.query(DailySummary).first()
+        assert saved.total_trips == 15
+        assert float(saved.total_gross) == 450.00
