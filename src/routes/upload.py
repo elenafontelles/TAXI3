@@ -43,10 +43,10 @@ def _build_lookups(session: Session) -> dict:
     drivers = session.query(Driver).filter_by(is_active=True).all()
     vehicles = session.query(Vehicle).filter_by(is_active=True).all()
 
-    # FreeNow: match by driver full name (case-insensitive)
-    name_to_driver = {}
+    # FreeNow: match by driver name (case-insensitive, supports partial match)
+    driver_names = []
     for d in drivers:
-        name_to_driver[d.name.strip().lower()] = d.id
+        driver_names.append((d.name.strip().lower(), d.id))
 
     # FreeNow: match vehicle by normalized plate
     plate_to_vehicle = {}
@@ -70,7 +70,7 @@ def _build_lookups(session: Session) -> dict:
                 license_to_vehicle[lic_num] = plate_to_vehicle[norm]
 
     return {
-        "name_to_driver": name_to_driver,
+        "driver_names": driver_names,
         "plate_to_vehicle": plate_to_vehicle,
         "license_to_driver": license_to_driver,
         "license_to_vehicle": license_to_vehicle,
@@ -82,10 +82,13 @@ def _resolve_driver_vehicle(record: dict, lookups: dict, fallback_driver: str, f
     driver_id = None
     vehicle_id = None
 
-    # FreeNow: match by name + plate
+    # FreeNow: match by name + plate (supports partial: "Ivan Alsina" matches "Ivan Alsina Burgos")
     if "_driver_name" in record:
         name_key = record["_driver_name"].strip().lower()
-        driver_id = lookups["name_to_driver"].get(name_key)
+        for db_name, db_id in lookups["driver_names"]:
+            if name_key == db_name or db_name.startswith(name_key) or name_key.startswith(db_name):
+                driver_id = db_id
+                break
     if "_plate" in record:
         plate_key = _normalize_plate(record["_plate"])
         vehicle_id = lookups["plate_to_vehicle"].get(plate_key)

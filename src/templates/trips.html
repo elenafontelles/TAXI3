@@ -1,10 +1,25 @@
 {% extends "base.html" %}
 {% block title %}Viajes - TAXI API{% endblock %}
+
+{% macro sort_url(column) -%}
+/trips?sort={{ column }}&order={{ 'asc' if sort == column and order == 'desc' else 'desc' }}{{ '&source=' + selected_source if selected_source }}&page=1
+{%- endmacro %}
+
+{% macro sort_icon(column) -%}
+{% if sort == column %}
+    {% if order == 'asc' %}&#9650;{% else %}&#9660;{% endif %}
+{% else %}
+    <span class="text-muted">&#9650;&#9660;</span>
+{% endif %}
+{%- endmacro %}
+
 {% block content %}
 <h4>Viajes</h4>
 <div class="card">
     <div class="card-body">
         <form method="get" action="/trips" class="row mb-3">
+            <input type="hidden" name="sort" value="{{ sort }}">
+            <input type="hidden" name="order" value="{{ order }}">
             <div class="col-md-3">
                 <select class="form-select" name="source">
                     <option value="">Todas las plataformas</option>
@@ -20,11 +35,11 @@
         <table class="table table-striped">
             <thead>
                 <tr>
-                    <th>Fecha</th>
-                    <th>Plataforma</th>
-                    <th>Conductor</th>
-                    <th>Bruto</th>
-                    <th>Neto</th>
+                    <th><a href="{{ sort_url('started_at') }}" class="text-decoration-none text-dark">Fecha {{ sort_icon('started_at') }}</a></th>
+                    <th><a href="{{ sort_url('source') }}" class="text-decoration-none text-dark">Plataforma {{ sort_icon('source') }}</a></th>
+                    <th><a href="{{ sort_url('driver_id') }}" class="text-decoration-none text-dark">Conductor {{ sort_icon('driver_id') }}</a></th>
+                    <th><a href="{{ sort_url('gross_amount') }}" class="text-decoration-none text-dark">Bruto {{ sort_icon('gross_amount') }}</a></th>
+                    <th><a href="{{ sort_url('payout_amount') }}" class="text-decoration-none text-dark">Neto {{ sort_icon('payout_amount') }}</a></th>
                 </tr>
             </thead>
             <tbody>
@@ -48,15 +63,15 @@
             <nav>
                 <ul class="pagination pagination-sm mb-0">
                     <li class="page-item {{ 'disabled' if page <= 1 }}">
-                        <a class="page-link" href="/trips?page={{ page - 1 }}{{ '&source=' + selected_source if selected_source }}">Anterior</a>
+                        <a class="page-link" href="/trips?page={{ page - 1 }}&sort={{ sort }}&order={{ order }}{{ '&source=' + selected_source if selected_source }}">Anterior</a>
                     </li>
                     {% for p in range(1, total_pages + 1) %}
                     <li class="page-item {{ 'active' if p == page }}">
-                        <a class="page-link" href="/trips?page={{ p }}{{ '&source=' + selected_source if selected_source }}">{{ p }}</a>
+                        <a class="page-link" href="/trips?page={{ p }}&sort={{ sort }}&order={{ order }}{{ '&source=' + selected_source if selected_source }}">{{ p }}</a>
                     </li>
                     {% endfor %}
                     <li class="page-item {{ 'disabled' if page >= total_pages }}">
-                        <a class="page-link" href="/trips?page={{ page + 1 }}{{ '&source=' + selected_source if selected_source }}">Siguiente</a>
+                        <a class="page-link" href="/trips?page={{ page + 1 }}&sort={{ sort }}&order={{ order }}{{ '&source=' + selected_source if selected_source }}">Siguiente</a>
                     </li>
                 </ul>
             </nav>

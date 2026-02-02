@@ -46,22 +46,37 @@ def get_earnings_summary(session: Session, driver_id: str | None = None) -> dict
     }
 
 
+SORTABLE_COLUMNS = {
+    "started_at": Trip.started_at,
+    "source": Trip.source,
+    "gross_amount": Trip.gross_amount,
+    "payout_amount": Trip.payout_amount,
+    "driver_id": Trip.driver_id,
+}
+
+
 def get_trips_list(
     session: Session,
     driver_id: str | None = None,
     source: str | None = None,
     page: int = 1,
     per_page: int = 50,
+    sort: str = "started_at",
+    order: str = "desc",
 ) -> tuple[list, int]:
-    """Get trips with pagination, optionally filtered.
+    """Get trips with pagination and sorting, optionally filtered.
 
     Returns (trips, total_count).
     """
-    q = session.query(Trip).order_by(Trip.started_at.desc())
+    q = session.query(Trip)
     if driver_id:
         q = q.filter(Trip.driver_id == driver_id)
     if source:
         q = q.filter(Trip.source == source)
+
+    col = SORTABLE_COLUMNS.get(sort, Trip.started_at)
+    q = q.order_by(col.asc() if order == "asc" else col.desc())
+
     total = q.count()
     trips = q.offset((page - 1) * per_page).limit(per_page).all()
     return trips, total

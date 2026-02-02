@@ -20,17 +20,22 @@ async def trips_page(
     request: Request,
     source: str = Query(None),
     page: int = Query(1, ge=1),
+    sort: str = Query("started_at"),
+    order: str = Query("desc"),
     session: Session = Depends(get_session),
 ):
     user = get_current_user(request)
     if not user:
         return RedirectResponse(url="/login", status_code=303)
 
+    if order not in ("asc", "desc"):
+        order = "desc"
+
     driver_id = user["sub"] if user.get("role") == "driver" else None
     per_page = 50
     trips_raw, total = get_trips_list(
         session, driver_id=driver_id, source=source if source else None,
-        page=page, per_page=per_page,
+        page=page, per_page=per_page, sort=sort, order=order,
     )
     total_pages = math.ceil(total / per_page) if total else 1
 
@@ -55,4 +60,6 @@ async def trips_page(
         "page": page,
         "total_pages": total_pages,
         "selected_source": source or "",
+        "sort": sort,
+        "order": order,
     })
