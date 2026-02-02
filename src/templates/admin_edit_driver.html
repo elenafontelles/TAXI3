@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Editar Conductor - TAXI API{% endblock %}
+{% block content %}
+<div class="d-flex align-items-center mb-3">
+    <a href="/admin" class="btn btn-outline-secondary btn-sm me-3">← Volver</a>
+    <h4 class="mb-0">Editar Conductor</h4>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <form method="post" action="/admin/driver/{{ driver.id }}">
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <label for="name" class="form-label">Nombre</label>
+                    <input type="text" class="form-control" id="name" name="name" value="{{ driver.name }}" required>
+                </div>
+                <div class="col-md-6">
+                    <label for="email" class="form-label">Email</label>
+                    <input type="email" class="form-control" id="email" name="email" value="{{ driver.email or '' }}">
+                </div>
+            </div>
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <label for="phone" class="form-label">Telefono</label>
+                    <input type="text" class="form-control" id="phone" name="phone" value="{{ driver.phone or '' }}">
+                </div>
+                <div class="col-md-6">
+                    <label for="license_number" class="form-label">Numero de Licencia</label>
+                    <input type="text" class="form-control" id="license_number" name="license_number" value="{{ driver.license_number }}" required>
+                </div>
+            </div>
+            <button type="submit" class="btn btn-primary">Guardar</button>
+            <a href="/admin" class="btn btn-outline-secondary ms-2">Cancelar</a>
+        </form>
+    </div>
+</div>
+{% endblock %}

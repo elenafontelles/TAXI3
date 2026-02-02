@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}Administracion - TAXI API{% endblock %}
+{% block content %}
+<h4>Administracion</h4>
+
+<div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span>Conductores</span>
+    </div>
+    <div class="card-body">
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>Nombre</th>
+                    <th>Email</th>
+                    <th>Telefono</th>
+                    <th>Licencia</th>
+                    <th>Rol</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for d in drivers %}
+                <tr>
+                    <td>{{ d.name }}</td>
+                    <td>{{ d.email or '—' }}</td>
+                    <td>{{ d.phone or '—' }}</td>
+                    <td>{{ d.license_number }}</td>
+                    <td>
+                        {% if d.is_owner %}
+                        <span class="badge bg-primary">Titular</span>
+                        {% else %}
+                        <span class="badge bg-secondary">Conductor</span>
+                        {% endif %}
+                    </td>
+                    <td><a href="/admin/driver/{{ d.id }}" class="btn btn-sm btn-outline-primary">Editar</a></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span>Vehiculos</span>
+    </div>
+    <div class="card-body">
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>Matricula</th>
+                    <th>Marca</th>
+                    <th>Modelo</th>
+                    <th>Ano</th>
+                    <th>Licencia</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for v in vehicles %}
+                <tr>
+                    <td><strong>{{ v.plate }}</strong></td>
+                    <td>{{ v.brand or '—' }}</td>
+                    <td>{{ v.model or '—' }}</td>
+                    <td>{{ v.year or '—' }}</td>
+                    <td>{{ v.license_number }}</td>
+                    <td><a href="/admin/vehicle/{{ v.id }}" class="btn btn-sm btn-outline-primary">Editar</a></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

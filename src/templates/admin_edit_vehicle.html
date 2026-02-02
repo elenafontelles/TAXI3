@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Editar Vehiculo - TAXI API{% endblock %}
+{% block content %}
+<div class="d-flex align-items-center mb-3">
+    <a href="/admin" class="btn btn-outline-secondary btn-sm me-3">← Volver</a>
+    <h4 class="mb-0">Editar Vehiculo</h4>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <form method="post" action="/admin/vehicle/{{ vehicle.id }}">
+            <div class="row mb-3">
+                <div class="col-md-4">
+                    <label for="plate" class="form-label">Matricula</label>
+                    <input type="text" class="form-control" id="plate" name="plate" value="{{ vehicle.plate }}" required>
+                </div>
+                <div class="col-md-4">
+                    <label for="brand" class="form-label">Marca</label>
+                    <input type="text" class="form-control" id="brand" name="brand" value="{{ vehicle.brand or '' }}">
+                </div>
+                <div class="col-md-4">
+                    <label for="model" class="form-label">Modelo</label>
+                    <input type="text" class="form-control" id="model" name="model" value="{{ vehicle.model or '' }}">
+                </div>
+            </div>
+            <div class="row mb-3">
+                <div class="col-md-4">
+                    <label for="year" class="form-label">Ano</label>
+                    <input type="number" class="form-control" id="year" name="year" value="{{ vehicle.year or '' }}" min="2000" max="2030">
+                </div>
+                <div class="col-md-4">
+                    <label for="license_number" class="form-label">Numero de Licencia</label>
+                    <input type="text" class="form-control" id="license_number" name="license_number" value="{{ vehicle.license_number }}" required>
+                </div>
+            </div>
+            <button type="submit" class="btn btn-primary">Guardar</button>
+            <a href="/admin" class="btn btn-outline-secondary ms-2">Cancelar</a>
+        </form>
+    </div>
+</div>
+{% endblock %}
