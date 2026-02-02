@@ -1,6 +1,4 @@
 # tests/unit/test_config.py
-import os
-import pytest
 
 
 def test_config_loads_from_env(monkeypatch):
