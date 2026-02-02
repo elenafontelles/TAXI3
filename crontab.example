@@ -1,0 +1,6 @@
+# TAXI API - Nightly Sync
+# Install with: crontab -e (then paste this line)
+# Or: crontab crontab.example
+
+# Run nightly sync at 02:00 AM
+0 2 * * * cd /app && /bin/bash scripts/run_nightly.sh >> /var/log/taxi-api-sync.log 2>&1
