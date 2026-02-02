@@ -1,13 +1,13 @@
 {% extends "base.html" %}
 {% block title %}Dashboard - TAXI API{% endblock %}
 {% block content %}
-<h4>Hoy</h4>
+<h4>Resumen de Ingresos</h4>
 <div class="row mb-4">
     <div class="col-md-4">
         <div class="card text-white bg-primary">
             <div class="card-body">
                 <h6 class="card-title">Hoy</h6>
-                <h3>0.00 EUR</h3>
+                <h3>{{ "%.2f"|format(summary.today) }} EUR</h3>
             </div>
         </div>
     </div>
@@ -15,7 +15,7 @@
         <div class="card text-white bg-success">
             <div class="card-body">
                 <h6 class="card-title">Esta Semana</h6>
-                <h3>0.00 EUR</h3>
+                <h3>{{ "%.2f"|format(summary.this_week) }} EUR</h3>
             </div>
         </div>
     </div>
@@ -23,17 +23,48 @@
         <div class="card text-white bg-info">
             <div class="card-body">
                 <h6 class="card-title">Este Mes</h6>
-                <h3>0.00 EUR</h3>
+                <h3>{{ "%.2f"|format(summary.this_month) }} EUR</h3>
             </div>
         </div>
     </div>
 </div>
 
 <div class="card mb-4">
+    <div class="card-header">Ingresos Diarios (Ultima Semana)</div>
     <div class="card-body">
         <canvas id="earningsChart"></canvas>
     </div>
 </div>
+
+{% if summary.recent_trips %}
+<div class="card">
+    <div class="card-header">Ultimos Viajes</div>
+    <div class="card-body">
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>Fecha</th>
+                    <th>Plataforma</th>
+                    <th>Bruto</th>
+                    <th>Neto</th>
+                    <th>Pago</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for trip in summary.recent_trips %}
+                <tr>
+                    <td>{{ trip.started_at.strftime('%d/%m %H:%M') }}</td>
+                    <td><span class="badge bg-{{ 'primary' if trip.source == 'uber' else 'success' if trip.source == 'freenow' else 'warning' }}">{{ trip.source|upper }}</span></td>
+                    <td>{{ "%.2f"|format(trip.gross_amount) }} EUR</td>
+                    <td>{{ "%.2f"|format(trip.payout_amount) }} EUR</td>
+                    <td>{{ trip.payment_method }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
 {% endblock %}
 
 {% block scripts %}
@@ -43,12 +74,19 @@ const ctx = document.getElementById('earningsChart').getContext('2d');
 new Chart(ctx, {
     type: 'bar',
     data: {
-        labels: ['Lun', 'Mar', 'Mie', 'Jue', 'Vie', 'Sab', 'Dom'],
+        labels: {{ summary.daily_chart.labels | tojson }},
         datasets: [{
-            label: 'Ingresos Diarios (EUR)',
-            data: [0, 0, 0, 0, 0, 0, 0],
+            label: 'Ingresos Brutos (EUR)',
+            data: {{ summary.daily_chart.data | tojson }},
             backgroundColor: 'rgba(54, 162, 235, 0.5)',
+            borderColor: 'rgba(54, 162, 235, 1)',
+            borderWidth: 1
         }]
+    },
+    options: {
+        scales: {
+            y: { beginAtZero: true }
+        }
     }
 });
 </script>

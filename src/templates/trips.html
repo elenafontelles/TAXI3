@@ -4,25 +4,19 @@
 <h4>Viajes</h4>
 <div class="card">
     <div class="card-body">
-        <div class="row mb-3">
+        <form method="get" action="/trips" class="row mb-3">
             <div class="col-md-3">
-                <input type="date" class="form-control" id="date_from" placeholder="Desde">
-            </div>
-            <div class="col-md-3">
-                <input type="date" class="form-control" id="date_to" placeholder="Hasta">
-            </div>
-            <div class="col-md-3">
-                <select class="form-select" id="source">
+                <select class="form-select" name="source">
                     <option value="">Todas las plataformas</option>
-                    <option value="uber">Uber</option>
-                    <option value="freenow">FreeNow</option>
-                    <option value="prima">Prima</option>
+                    <option value="uber" {{ 'selected' if selected_source == 'uber' }}>Uber</option>
+                    <option value="freenow" {{ 'selected' if selected_source == 'freenow' }}>FreeNow</option>
+                    <option value="prima" {{ 'selected' if selected_source == 'prima' }}>Prima</option>
                 </select>
             </div>
             <div class="col-md-3">
-                <button class="btn btn-primary">Filtrar</button>
+                <button type="submit" class="btn btn-primary">Filtrar</button>
             </div>
-        </div>
+        </form>
         <table class="table table-striped">
             <thead>
                 <tr>
@@ -37,7 +31,7 @@
                 {% for trip in trips %}
                 <tr>
                     <td>{{ trip.started_at }}</td>
-                    <td>{{ trip.source }}</td>
+                    <td><span class="badge bg-{{ 'primary' if trip.source == 'uber' else 'success' if trip.source == 'freenow' else 'warning' }}">{{ trip.source|upper }}</span></td>
                     <td>{{ trip.driver_name }}</td>
                     <td>{{ trip.gross_amount }} EUR</td>
                     <td>{{ trip.payout_amount }} EUR</td>
@@ -48,6 +42,7 @@
                 {% endif %}
             </tbody>
         </table>
+        <p class="text-muted mt-2">{{ trips|length }} viajes</p>
     </div>
 </div>
 {% endblock %}
