@@ -9,6 +9,7 @@ from src.routes.dashboard import router as dashboard_router
 from src.routes.trips import router as trips_router
 from src.routes.summary import router as summary_router
 from src.routes.export import router as export_router
+from src.routes.upload import router as upload_router
 
 settings = get_settings()
 
@@ -24,6 +25,7 @@ app.include_router(dashboard_router)
 app.include_router(trips_router)
 app.include_router(summary_router)
 app.include_router(export_router)
+app.include_router(upload_router)
 
 
 @app.get("/health")
