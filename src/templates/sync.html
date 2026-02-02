@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}Sincronizacion - TAXI API{% endblock %}
+{% block content %}
+<h4>Estado de Sincronizacion</h4>
+
+<div class="row mb-4">
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body text-center">
+                <h6 class="text-muted">Uber</h6>
+                <span class="badge bg-secondary">Sin datos</span>
+                <p class="small text-muted mt-2">Ultima sync: --</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body text-center">
+                <h6 class="text-muted">FreeNow</h6>
+                <span class="badge bg-secondary">Sin datos</span>
+                <p class="small text-muted mt-2">Ultima sync: --</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body text-center">
+                <h6 class="text-muted">Prima</h6>
+                <span class="badge bg-secondary">Sin datos</span>
+                <p class="small text-muted mt-2">Ultima sync: --</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h6 class="mb-0">Historial de Sincronizacion</h6>
+    </div>
+    <div class="card-body">
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>Fecha</th>
+                    <th>Plataforma</th>
+                    <th>Estado</th>
+                    <th>Viajes importados</th>
+                    <th>Errores</th>
+                    <th>Duracion</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for log in sync_logs %}
+                <tr>
+                    <td>{{ log.started_at }}</td>
+                    <td>{{ log.platform }}</td>
+                    <td>
+                        {% if log.status == 'success' %}
+                        <span class="badge bg-success">OK</span>
+                        {% elif log.status == 'error' %}
+                        <span class="badge bg-danger">Error</span>
+                        {% else %}
+                        <span class="badge bg-warning">{{ log.status }}</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ log.records_imported }}</td>
+                    <td>{{ log.error_message or '-' }}</td>
+                    <td>{{ log.duration_seconds }}s</td>
+                </tr>
+                {% endfor %}
+                {% if not sync_logs %}
+                <tr><td colspan="6" class="text-center text-muted">No hay registros de sincronizacion</td></tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

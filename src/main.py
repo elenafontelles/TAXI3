@@ -10,6 +10,7 @@ from src.routes.trips import router as trips_router
 from src.routes.summary import router as summary_router
 from src.routes.export import router as export_router
 from src.routes.upload import router as upload_router
+from src.routes.sync import router as sync_router
 
 settings = get_settings()
 
@@ -26,6 +27,7 @@ app.include_router(trips_router)
 app.include_router(summary_router)
 app.include_router(export_router)
 app.include_router(upload_router)
+app.include_router(sync_router)
 
 
 @app.get("/health")
