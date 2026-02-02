@@ -15,6 +15,7 @@ class Driver(Base):
     phone: Mapped[str | None] = mapped_column(String(20))
     license_number: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
     owner_id: Mapped[str] = mapped_column(String(36), ForeignKey("owners.id"), nullable=False)
+    password_hash: Mapped[str | None] = mapped_column(String(255))
     is_owner: Mapped[bool] = mapped_column(Boolean, default=False)
     uber_driver_id: Mapped[str | None] = mapped_column(String(100))
     freenow_driver_id: Mapped[str | None] = mapped_column(String(100))
