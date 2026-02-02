@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}Resumen - TAXI API{% endblock %}
+{% block content %}
+<h4>Resumen Diario</h4>
+<div class="card">
+    <div class="card-body">
+        <div class="row mb-3">
+            <div class="col-md-3">
+                <input type="date" class="form-control" id="date_from" placeholder="Desde">
+            </div>
+            <div class="col-md-3">
+                <input type="date" class="form-control" id="date_to" placeholder="Hasta">
+            </div>
+            <div class="col-md-3">
+                <select class="form-select" id="driver_filter">
+                    <option value="">Todos los conductores</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <button class="btn btn-primary">Filtrar</button>
+            </div>
+        </div>
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>Fecha</th>
+                    <th>Conductor</th>
+                    <th>Vehiculo</th>
+                    <th>Viajes</th>
+                    <th>Bruto</th>
+                    <th>Comision</th>
+                    <th>Neto</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for s in summaries %}
+                <tr>
+                    <td>{{ s.date }}</td>
+                    <td>{{ s.driver_name }}</td>
+                    <td>{{ s.vehicle }}</td>
+                    <td>{{ s.trip_count }}</td>
+                    <td>{{ s.gross_amount }} EUR</td>
+                    <td>{{ s.commission }} EUR</td>
+                    <td>{{ s.net_amount }} EUR</td>
+                </tr>
+                {% endfor %}
+                {% if not summaries %}
+                <tr><td colspan="7" class="text-center text-muted">No hay datos de resumen</td></tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
