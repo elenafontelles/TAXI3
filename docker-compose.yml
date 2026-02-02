@@ -1,0 +1,39 @@
+# docker-compose.yml
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: taxi-api-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:-taxi_api}
+      POSTGRES_USER: ${DB_USER:-taxi_admin}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Database password required}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-taxi_admin}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build: .
+    container_name: taxi-api
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://${DB_USER:-taxi_admin}:${DB_PASSWORD}@db:5432/${DB_NAME:-taxi_api}
+    ports:
+      - "${API_PORT:-8000}:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./src:/app/src:ro
+      - ./imports:/app/imports
+
+volumes:
+  postgres_data:
