@@ -2,18 +2,52 @@
 {% block title %}Subir CSV - TAXI API{% endblock %}
 {% block content %}
 <h4>Subir Archivo CSV</h4>
+
+{% if success %}
+<div class="alert alert-success alert-dismissible fade show" role="alert">
+    {{ success }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
+{% if error %}
+<div class="alert alert-danger alert-dismissible fade show" role="alert">
+    {{ error }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
+
 <div class="card">
     <div class="card-body">
         <p class="text-muted">Arrastra un archivo CSV o seleccionalo manualmente para importar viajes.</p>
         <form method="post" action="/upload/process" enctype="multipart/form-data">
-            <div class="mb-3">
-                <label for="platform" class="form-label">Plataforma</label>
-                <select class="form-select" id="platform" name="platform" required>
-                    <option value="">Selecciona plataforma</option>
-                    <option value="uber">Uber</option>
-                    <option value="freenow">FreeNow</option>
-                    <option value="prima">Prima</option>
-                </select>
+            <div class="row mb-3">
+                <div class="col-md-4">
+                    <label for="platform" class="form-label">Plataforma</label>
+                    <select class="form-select" id="platform" name="platform" required>
+                        <option value="">Selecciona plataforma</option>
+                        <option value="uber">Uber</option>
+                        <option value="freenow">FreeNow</option>
+                        <option value="prima">Prima</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label for="driver_id" class="form-label">Conductor</label>
+                    <select class="form-select" id="driver_id" name="driver_id" required>
+                        <option value="">Selecciona conductor</option>
+                        {% for d in drivers %}
+                        <option value="{{ d.id }}">{{ d.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label for="vehicle_id" class="form-label">Vehiculo</label>
+                    <select class="form-select" id="vehicle_id" name="vehicle_id" required>
+                        <option value="">Selecciona vehiculo</option>
+                        {% for v in vehicles %}
+                        <option value="{{ v.id }}">{{ v.plate }} - {{ v.brand }} {{ v.model }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
             </div>
             <div class="mb-3">
                 <div id="drop-zone" class="border border-2 border-dashed rounded p-5 text-center" style="cursor: pointer; border-color: #dee2e6 !important;">

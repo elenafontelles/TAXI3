@@ -12,9 +12,26 @@
     <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
         <div class="container">
             <a class="navbar-brand" href="/">TAXI API</a>
-            <div class="navbar-nav ms-auto">
-                <span class="nav-link text-light">{{ user.name }} ({{ user.role }})</span>
-                <a class="nav-link" href="/logout">Salir</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navMenu">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navMenu">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item"><a class="nav-link" href="/">Dashboard</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/trips">Viajes</a></li>
+                    {% if user.role in ['admin', 'owner'] %}
+                    <li class="nav-item"><a class="nav-link" href="/summary">Resumen</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/export">Exportar</a></li>
+                    {% endif %}
+                    {% if user.role == 'admin' %}
+                    <li class="nav-item"><a class="nav-link" href="/upload">Subir CSV</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/sync">Sincronizar</a></li>
+                    {% endif %}
+                </ul>
+                <div class="navbar-nav">
+                    <span class="nav-link text-light">{{ user.name }} ({{ user.role }})</span>
+                    <a class="nav-link" href="/logout">Salir</a>
+                </div>
             </div>
         </div>
     </nav>
