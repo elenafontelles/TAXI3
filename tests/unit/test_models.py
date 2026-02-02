@@ -40,3 +40,29 @@ class TestOwnerModel:
             owner = Owner(tax_id="12345678A")
             db_session.add(owner)
             db_session.commit()
+
+
+class TestDriverModel:
+    def test_create_driver(self, db_session):
+        from src.models.owner import Owner
+        from src.models.driver import Driver
+
+        owner = Owner(name="Ivan Tintore", tax_id="12345678A")
+        db_session.add(owner)
+        db_session.commit()
+
+        driver = Driver(
+            name="Test Driver",
+            email="driver@test.com",
+            license_number="LIC001",
+            owner_id=owner.id,
+            is_owner=False,
+        )
+        db_session.add(driver)
+        db_session.commit()
+
+        saved = db_session.query(Driver).first()
+        assert saved.name == "Test Driver"
+        assert saved.owner_id == owner.id
+        assert saved.is_owner is False
+        assert saved.is_active is True
