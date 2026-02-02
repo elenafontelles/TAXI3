@@ -18,6 +18,7 @@ COPY src/ /app/src/
 COPY scrapers/ /app/scrapers/
 COPY scripts/ /app/scripts/
 COPY migrations/ /app/migrations/
+COPY alembic.ini /app/alembic.ini
 
 # Environment
 ENV PYTHONUNBUFFERED=1 \
