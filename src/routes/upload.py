@@ -5,7 +5,7 @@ import tempfile
 from fastapi import APIRouter, Request, Depends, UploadFile, File, Form
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
-from src.routes.auth import get_current_user
+from src.routes.auth import require_admin
 from src.database import get_session
 from src.models.driver import Driver
 from src.models.vehicle import Vehicle
@@ -13,7 +13,7 @@ from scripts.parsers.uber_parser import parse_uber_csv
 from scripts.parsers.freenow_parser import parse_freenow_csv
 from scripts.parsers.prima_parser import parse_prima_csv
 from src.models.trip import Trip
-from src.template_config import templates, root_path
+from src.template_config import templates
 
 router = APIRouter()
 
@@ -104,12 +104,7 @@ def _resolve_driver_vehicle(record: dict, lookups: dict, fallback_driver: str, f
 
 
 @router.get("/upload", response_class=HTMLResponse)
-async def upload_page(request: Request, session: Session = Depends(get_session)):
-    user = get_current_user(request)
-    if not user:
-        return RedirectResponse(url=f"{root_path}/login", status_code=303)
-    if user.get("role") != "admin":
-        return RedirectResponse(url=f"{root_path}/", status_code=303)
+async def upload_page(request: Request, user: dict = Depends(require_admin), session: Session = Depends(get_session)):
     drivers = session.query(Driver).filter_by(is_active=True).all()
     vehicles = session.query(Vehicle).filter_by(is_active=True).all()
     return templates.TemplateResponse(request, "upload.html", {
@@ -122,16 +117,13 @@ async def upload_page(request: Request, session: Session = Depends(get_session))
 @router.post("/upload/process", response_class=HTMLResponse)
 async def process_upload(
     request: Request,
+    user: dict = Depends(require_admin),
     platform: str = Form(...),
     driver_id: str = Form(""),
     vehicle_id: str = Form(""),
     csv_file: UploadFile = File(...),
     session: Session = Depends(get_session),
 ):
-    user = get_current_user(request)
-    if not user or user.get("role") != "admin":
-        return RedirectResponse(url=f"{root_path}/login", status_code=303)
-
     parser = PARSERS.get(platform)
     if not parser:
         return await _render_result(request, session, user, error="Plataforma no reconocida")

@@ -3,10 +3,10 @@ import os
 from urllib.parse import urlparse
 
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from src.config import get_settings
-from src.routes.auth import router as auth_router
+from src.routes.auth import router as auth_router, AuthRedirect
 from src.routes.dashboard import router as dashboard_router
 from src.routes.trips import router as trips_router
 from src.routes.summary import router as summary_router
@@ -38,6 +38,11 @@ async def csrf_protection(request: Request, call_next):
             if request_host and request_host != allowed_host:
                 return JSONResponse(status_code=403, content={"detail": "Origin not allowed"})
     return await call_next(request)
+
+
+@app.exception_handler(AuthRedirect)
+async def auth_redirect_handler(request: Request, exc: AuthRedirect):
+    return RedirectResponse(url=exc.url, status_code=303)
 
 
 app.include_router(auth_router)

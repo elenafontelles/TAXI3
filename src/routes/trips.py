@@ -1,13 +1,13 @@
 # src/routes/trips.py
 import math
 from fastapi import APIRouter, Request, Depends, Query
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
-from src.routes.auth import get_current_user
+from src.routes.auth import require_auth
 from src.database import get_session
 from src.services.trip_service import get_trips_list
 from src.models.driver import Driver
-from src.template_config import templates, root_path
+from src.template_config import templates
 
 router = APIRouter()
 
@@ -15,16 +15,13 @@ router = APIRouter()
 @router.get("/trips", response_class=HTMLResponse)
 async def trips_page(
     request: Request,
+    user: dict = Depends(require_auth),
     source: str = Query(None),
     page: int = Query(1, ge=1),
     sort: str = Query("started_at"),
     order: str = Query("desc"),
     session: Session = Depends(get_session),
 ):
-    user = get_current_user(request)
-    if not user:
-        return RedirectResponse(url=f"{root_path}/login", status_code=303)
-
     if order not in ("asc", "desc"):
         order = "desc"
 

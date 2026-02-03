@@ -6,7 +6,7 @@ from datetime import datetime, date, timedelta, timezone
 from fastapi import APIRouter, Request, Depends, Form
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
-from src.routes.auth import get_current_user
+from src.routes.auth import require_admin
 from src.database import get_engine
 from src.database import get_session
 from src.models.sync_log import SyncLog
@@ -84,13 +84,7 @@ def _import_freenow_csv(csv_path: str, session: Session) -> tuple[int, int, int]
 
 
 @router.get("/sync", response_class=HTMLResponse)
-async def sync_page(request: Request, session: Session = Depends(get_session)):
-    user = get_current_user(request)
-    if not user:
-        return RedirectResponse(url=f"{root_path}/login", status_code=303)
-    if user.get("role") != "admin":
-        return RedirectResponse(url=f"{root_path}/", status_code=303)
-
+async def sync_page(request: Request, user: dict = Depends(require_admin), session: Session = Depends(get_session)):
     platform_status = _get_platform_status(session)
     import_files = _list_import_files()
     sync_logs = (session.query(SyncLog)
@@ -163,14 +157,11 @@ def _run_freenow_sync(log_id: int, sd: date, ed: date):
 @router.post("/sync/freenow", response_class=HTMLResponse)
 async def sync_freenow(
     request: Request,
+    user: dict = Depends(require_admin),
     start_date: str = Form(""),
     end_date: str = Form(""),
     session: Session = Depends(get_session),
 ):
-    user = get_current_user(request)
-    if not user or user.get("role") != "admin":
-        return RedirectResponse(url=f"{root_path}/login", status_code=303)
-
     # Guard against double-runs
     already_running = (session.query(SyncLog)
                        .filter_by(source="freenow", status="running")

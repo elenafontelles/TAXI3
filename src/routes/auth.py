@@ -71,3 +71,25 @@ def get_current_user(request: Request) -> dict | None:
     if not token:
         return None
     return decode_access_token(token)
+
+
+class AuthRedirect(Exception):
+    """Raised by auth dependencies to trigger a redirect."""
+    def __init__(self, url: str):
+        self.url = url
+
+
+def require_auth(request: Request) -> dict:
+    """FastAPI dependency: returns user dict or redirects to login."""
+    user = get_current_user(request)
+    if not user:
+        raise AuthRedirect(f"{root_path}/login")
+    return user
+
+
+def require_admin(request: Request) -> dict:
+    """FastAPI dependency: returns admin user dict or redirects."""
+    user = require_auth(request)
+    if user.get("role") not in ("admin", "owner"):
+        raise AuthRedirect(f"{root_path}/")
+    return user
