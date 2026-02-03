@@ -41,6 +41,7 @@ jobs:
         run: |
           sudo apt-get update && sudo apt-get install -y sshpass
           sshpass -p "${{ secrets.VPS_PASSWORD }}" ssh -o StrictHostKeyChecking=no ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "\
+            echo '${{ secrets.GITHUB_TOKEN }}' | docker login ghcr.io -u ${{ github.actor }} --password-stdin && \
             cd ${{ secrets.DEPLOY_PATH || '/opt/taxi-api' }} && \
             docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest && \
             docker compose -f docker-compose.prod.yml up -d"
