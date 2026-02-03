@@ -36,16 +36,19 @@ async def trips_page(
     )
     total_pages = math.ceil(total / per_page) if total else 1
 
-    driver_cache = {}
+    driver_ids = {t.driver_id for t in trips_raw}
+    if driver_ids:
+        rows = session.query(Driver.id, Driver.name).filter(Driver.id.in_(driver_ids)).all()
+        driver_cache = {r.id: r.name for r in rows}
+    else:
+        driver_cache = {}
+
     trips = []
     for t in trips_raw:
-        if t.driver_id not in driver_cache:
-            d = session.query(Driver).filter_by(id=t.driver_id).first()
-            driver_cache[t.driver_id] = d.name if d else "Desconocido"
         trips.append({
             "started_at": t.started_at.strftime("%d/%m/%Y %H:%M"),
             "source": t.source,
-            "driver_name": driver_cache[t.driver_id],
+            "driver_name": driver_cache.get(t.driver_id, "Desconocido"),
             "gross_amount": f"{t.gross_amount:.2f}",
             "payout_amount": f"{t.payout_amount:.2f}" if t.payout_amount else "—",
         })

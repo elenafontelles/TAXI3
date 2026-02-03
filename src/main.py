@@ -1,7 +1,9 @@
 # src/main.py
 import os
+from urllib.parse import urlparse
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from src.config import get_settings
 from src.routes.auth import router as auth_router
@@ -24,6 +26,19 @@ if os.path.isdir(static_dir):
 
 # Expose root_path to health endpoint
 _root_path = os.environ.get("ROOT_PATH", "")
+
+@app.middleware("http")
+async def csrf_protection(request: Request, call_next):
+    """Reject cross-origin state-changing requests (CSRF defence)."""
+    if request.method in ("POST", "PUT", "DELETE", "PATCH"):
+        origin = request.headers.get("origin") or request.headers.get("referer")
+        if origin:
+            allowed_host = request.headers.get("host", "").split(":")[0]
+            request_host = urlparse(origin).hostname
+            if request_host and request_host != allowed_host:
+                return JSONResponse(status_code=403, content={"detail": "Origin not allowed"})
+    return await call_next(request)
+
 
 app.include_router(auth_router)
 app.include_router(dashboard_router)

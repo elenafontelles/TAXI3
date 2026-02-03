@@ -1,4 +1,6 @@
 # src/routes/auth.py
+import time
+from collections import defaultdict
 from fastapi import APIRouter, Request, Depends
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
@@ -10,6 +12,20 @@ from src.template_config import templates, root_path
 
 router = APIRouter()
 
+# Rate limiting: 5 attempts per IP per 5-minute window
+_login_attempts: dict[str, list[float]] = defaultdict(list)
+_MAX_ATTEMPTS = 5
+_WINDOW_SECONDS = 300
+
+
+def _is_rate_limited(ip: str) -> bool:
+    now = time.monotonic()
+    _login_attempts[ip] = [t for t in _login_attempts[ip] if now - t < _WINDOW_SECONDS]
+    if len(_login_attempts[ip]) >= _MAX_ATTEMPTS:
+        return True
+    _login_attempts[ip].append(now)
+    return False
+
 
 @router.get("/login", response_class=HTMLResponse)
 async def login_page(request: Request):
@@ -18,6 +34,13 @@ async def login_page(request: Request):
 
 @router.post("/login")
 async def login(request: Request, session: Session = Depends(get_session)):
+    client_ip = request.client.host if request.client else "unknown"
+    if _is_rate_limited(client_ip):
+        return templates.TemplateResponse(
+            request, "login.html",
+            {"error": "Demasiados intentos. Espera unos minutos."},
+        )
+
     form = await request.form()
     email = form.get("email")
     password = form.get("password")
