@@ -3,6 +3,7 @@ from fastapi import APIRouter, Request, Depends
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 from src.database import get_session
+from src.config import get_settings
 from src.services.auth_service import verify_password, create_access_token, decode_access_token
 from src.models.driver import Driver
 from src.template_config import templates, root_path
@@ -27,7 +28,11 @@ async def login(request: Request, session: Session = Depends(get_session)):
 
     token = create_access_token({"sub": driver.id, "role": "admin" if driver.is_owner else "driver", "name": driver.name})
     response = RedirectResponse(url=f"{root_path}/", status_code=303)
-    response.set_cookie(key="access_token", value=token, httponly=True, max_age=86400, path="/")
+    is_prod = get_settings().ENVIRONMENT != "development"
+    response.set_cookie(
+        key="access_token", value=token, httponly=True, max_age=86400,
+        path="/", secure=is_prod, samesite="lax",
+    )
     return response
 
 
