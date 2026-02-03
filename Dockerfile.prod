@@ -25,10 +25,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxrandr2 \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies + Chromium binary
+# Install Python dependencies
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt \
-    && playwright install chromium
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
 COPY src/ /app/src/
@@ -42,6 +41,9 @@ RUN chmod +x /app/entrypoint.sh
 # Create non-root user
 RUN useradd -m -r appuser && chown -R appuser:appuser /app
 USER appuser
+
+# Install Chromium as appuser so it lands in appuser's cache
+RUN playwright install chromium
 
 # Create imports directory owned by appuser
 RUN mkdir -p /app/imports
