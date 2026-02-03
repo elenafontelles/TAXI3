@@ -50,13 +50,13 @@ class FreeNowScraper(BaseScraper):
             page.wait_for_selector('input[name="username"]', timeout=15000)
             page.fill('input[name="username"]', self.email)
             page.fill('input[name="password"]', self.password)
-            page.click('button:has-text("Sign in")')
+            page.locator('button:has-text("Sign in"), button:has-text("Iniciar sesión")').first.click()
             page.wait_for_timeout(4000)
             print(f"   Logged in -> {page.url}")
 
             # 2) Dismiss cookie banner if present
-            cookie_btn = page.query_selector('button:has-text("Accept All")')
-            if cookie_btn:
+            cookie_btn = page.locator('button:has-text("Accept All"), button:has-text("Aceptar todo")').first
+            if cookie_btn.count() > 0:
                 cookie_btn.click()
                 page.wait_for_timeout(500)
 
@@ -96,33 +96,34 @@ class FreeNowScraper(BaseScraper):
                 print("   No bookings found for this date range (button disabled)")
                 return None
 
-            # 6) Record notification badge count before requesting
-            notif_btn = page.query_selector('[aria-label="Open Notifications Inbox"]')
-            badge_before = notif_btn.inner_text().strip() if notif_btn else "0"
-
-            # 7) Click "Request bookings" button
+            # 6) Click download button and wait for "Preparing download" banner
             print("4. Requesting CSV generation...")
             dl_btn.click()
             page.wait_for_timeout(2000)
 
-            # 8) Wait for notification badge to change (file ready)
+            # 7) Wait for file to be ready: poll notifications for a "Download"/"Descargar" link
             print("5. Waiting for file to be ready...")
+            dl_link_selector = 'a:has-text("Download"), a:has-text("Descargar")'
+            notif_btn = page.locator('button:has(svg), [aria-label*="Notification"]').first
             for attempt in range(30):  # max ~60 seconds
                 page.wait_for_timeout(2000)
-                badge_now = notif_btn.inner_text().strip() if notif_btn else "0"
-                if badge_now != badge_before:
-                    print(f"   Ready! (badge {badge_before} -> {badge_now})")
+                notif_btn.click()
+                page.wait_for_timeout(1000)
+                unread_download = page.locator(dl_link_selector).first
+                if unread_download.count() > 0:
+                    print(f"   Ready! (found Download link after ~{(attempt+1)*2}s)")
                     break
+                # Close panel by clicking elsewhere
+                page.keyboard.press("Escape")
             else:
+                # Open notifications one last time anyway
+                notif_btn.click()
+                page.wait_for_timeout(1000)
                 print("   Timeout waiting for notification, trying anyway...")
 
-            # 9) Open notification inbox and click the first "Download" link
+            # 8) Click the first "Download"/"Descargar" link in the notifications panel
             print("6. Downloading from notifications...")
-            notif_btn.click()
-            page.wait_for_timeout(2000)
-
-            # The notification panel has <a> tags with text "Download"
-            download_links = page.locator('a:has-text("Download")')
+            download_links = page.locator(dl_link_selector)
             zip_path = output_path + ".zip"
 
             with page.expect_download(timeout=30000) as download_info:

@@ -28,6 +28,7 @@ class BaseScraper:
             context = browser.new_context(
                 viewport={"width": 1280, "height": 900},
                 accept_downloads=True,
+                locale="es-ES",
             )
             page = context.new_page()
             try:
