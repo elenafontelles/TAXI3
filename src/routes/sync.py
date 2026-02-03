@@ -101,13 +101,15 @@ async def sync_page(request: Request, session: Session = Depends(get_session)):
     has_running_sync = any(l.status == "running" for l in sync_logs)
 
     yesterday = (date.today() - timedelta(days=1)).isoformat()
+    week_ago = (date.today() - timedelta(days=7)).isoformat()
     return templates.TemplateResponse(request, "sync.html", {
         "user": user,
         "platform_status": platform_status,
         "import_files": import_files,
         "sync_logs": sync_logs,
         "has_running_sync": has_running_sync,
-        "default_date": yesterday,
+        "default_start": week_ago,
+        "default_end": yesterday,
     })
 
 
