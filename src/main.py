@@ -22,6 +22,9 @@ static_dir = os.path.join(os.path.dirname(__file__), "static")
 if os.path.isdir(static_dir):
     app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
+# Expose root_path to health endpoint
+_root_path = os.environ.get("ROOT_PATH", "")
+
 app.include_router(auth_router)
 app.include_router(dashboard_router)
 app.include_router(trips_router)
@@ -34,4 +37,4 @@ app.include_router(admin_router)
 
 @app.get("/health")
 async def health():
-    return {"status": "healthy", "version": "1.0.0", "app": settings.APP_NAME}
+    return {"status": "healthy", "version": "1.0.0", "app": settings.APP_NAME, "root_path": _root_path}

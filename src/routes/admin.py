@@ -1,18 +1,15 @@
 # src/routes/admin.py
-import os
 from fastapi import APIRouter, Request, Depends, Form
 from fastapi.responses import HTMLResponse, RedirectResponse
-from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 from src.routes.auth import get_current_user
 from src.database import get_session
 from src.models.driver import Driver
 from src.models.vehicle import Vehicle
 from src.models.owner import Owner
+from src.template_config import templates, root_path
 
 router = APIRouter()
-templates_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "templates")
-templates = Jinja2Templates(directory=templates_dir)
 
 
 def _require_admin(request: Request):
@@ -26,7 +23,7 @@ def _require_admin(request: Request):
 async def admin_page(request: Request, session: Session = Depends(get_session)):
     user = _require_admin(request)
     if not user:
-        return RedirectResponse(url="/", status_code=303)
+        return RedirectResponse(url=f"{root_path}/", status_code=303)
     drivers = session.query(Driver).filter_by(is_active=True).all()
     vehicles = session.query(Vehicle).filter_by(is_active=True).all()
     owners = session.query(Owner).filter_by(is_active=True).all()
@@ -44,10 +41,10 @@ async def admin_page(request: Request, session: Session = Depends(get_session)):
 async def edit_driver_page(driver_id: str, request: Request, session: Session = Depends(get_session)):
     user = _require_admin(request)
     if not user:
-        return RedirectResponse(url="/", status_code=303)
+        return RedirectResponse(url=f"{root_path}/", status_code=303)
     driver = session.query(Driver).get(driver_id)
     if not driver:
-        return RedirectResponse(url="/admin", status_code=303)
+        return RedirectResponse(url=f"{root_path}/admin", status_code=303)
     owners = session.query(Owner).filter_by(is_active=True).all()
     return templates.TemplateResponse(request, "admin_edit_driver.html", {
         "user": user,
@@ -68,7 +65,7 @@ async def update_driver(
 ):
     user = _require_admin(request)
     if not user:
-        return RedirectResponse(url="/", status_code=303)
+        return RedirectResponse(url=f"{root_path}/", status_code=303)
     driver = session.query(Driver).get(driver_id)
     if driver:
         driver.name = name
@@ -76,7 +73,7 @@ async def update_driver(
         driver.phone = phone or None
         driver.license_number = license_number
         session.commit()
-    return RedirectResponse(url="/admin", status_code=303)
+    return RedirectResponse(url=f"{root_path}/admin", status_code=303)
 
 
 # --- Vehicle endpoints ---
@@ -85,10 +82,10 @@ async def update_driver(
 async def edit_vehicle_page(vehicle_id: str, request: Request, session: Session = Depends(get_session)):
     user = _require_admin(request)
     if not user:
-        return RedirectResponse(url="/", status_code=303)
+        return RedirectResponse(url=f"{root_path}/", status_code=303)
     vehicle = session.query(Vehicle).get(vehicle_id)
     if not vehicle:
-        return RedirectResponse(url="/admin", status_code=303)
+        return RedirectResponse(url=f"{root_path}/admin", status_code=303)
     owners = session.query(Owner).filter_by(is_active=True).all()
     return templates.TemplateResponse(request, "admin_edit_vehicle.html", {
         "user": user,
@@ -110,7 +107,7 @@ async def update_vehicle(
 ):
     user = _require_admin(request)
     if not user:
-        return RedirectResponse(url="/", status_code=303)
+        return RedirectResponse(url=f"{root_path}/", status_code=303)
     vehicle = session.query(Vehicle).get(vehicle_id)
     if vehicle:
         vehicle.plate = plate
@@ -119,4 +116,4 @@ async def update_vehicle(
         vehicle.model = model or None
         vehicle.year = year
         session.commit()
-    return RedirectResponse(url="/admin", status_code=303)
+    return RedirectResponse(url=f"{root_path}/admin", status_code=303)

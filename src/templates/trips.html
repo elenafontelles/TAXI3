@@ -2,7 +2,7 @@
 {% block title %}Viajes - TAXI API{% endblock %}
 
 {% macro sort_url(column) -%}
-/trips?sort={{ column }}&order={{ 'asc' if sort == column and order == 'desc' else 'desc' }}{{ '&source=' + selected_source if selected_source }}&page=1
+{{ root_path }}/trips?sort={{ column }}&order={{ 'asc' if sort == column and order == 'desc' else 'desc' }}{{ '&source=' + selected_source if selected_source }}&page=1
 {%- endmacro %}
 
 {% macro sort_icon(column) -%}
@@ -17,7 +17,7 @@
 <h4>Viajes</h4>
 <div class="card">
     <div class="card-body">
-        <form method="get" action="/trips" class="row mb-3">
+        <form method="get" action="{{ root_path }}/trips" class="row mb-3">
             <input type="hidden" name="sort" value="{{ sort }}">
             <input type="hidden" name="order" value="{{ order }}">
             <div class="col-md-3">
@@ -63,15 +63,15 @@
             <nav>
                 <ul class="pagination pagination-sm mb-0">
                     <li class="page-item {{ 'disabled' if page <= 1 }}">
-                        <a class="page-link" href="/trips?page={{ page - 1 }}&sort={{ sort }}&order={{ order }}{{ '&source=' + selected_source if selected_source }}">Anterior</a>
+                        <a class="page-link" href="{{ root_path }}/trips?page={{ page - 1 }}&sort={{ sort }}&order={{ order }}{{ '&source=' + selected_source if selected_source }}">Anterior</a>
                     </li>
                     {% for p in range(1, total_pages + 1) %}
                     <li class="page-item {{ 'active' if p == page }}">
-                        <a class="page-link" href="/trips?page={{ p }}&sort={{ sort }}&order={{ order }}{{ '&source=' + selected_source if selected_source }}">{{ p }}</a>
+                        <a class="page-link" href="{{ root_path }}/trips?page={{ p }}&sort={{ sort }}&order={{ order }}{{ '&source=' + selected_source if selected_source }}">{{ p }}</a>
                     </li>
                     {% endfor %}
                     <li class="page-item {{ 'disabled' if page >= total_pages }}">
-                        <a class="page-link" href="/trips?page={{ page + 1 }}&sort={{ sort }}&order={{ order }}{{ '&source=' + selected_source if selected_source }}">Siguiente</a>
+                        <a class="page-link" href="{{ root_path }}/trips?page={{ page + 1 }}&sort={{ sort }}&order={{ order }}{{ '&source=' + selected_source if selected_source }}">Siguiente</a>
                     </li>
                 </ul>
             </nav>

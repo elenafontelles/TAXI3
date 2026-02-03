@@ -2,13 +2,13 @@
 {% block title %}Editar Vehiculo - TAXI API{% endblock %}
 {% block content %}
 <div class="d-flex align-items-center mb-3">
-    <a href="/admin" class="btn btn-outline-secondary btn-sm me-3">← Volver</a>
+    <a href="{{ root_path }}/admin" class="btn btn-outline-secondary btn-sm me-3">← Volver</a>
     <h4 class="mb-0">Editar Vehiculo</h4>
 </div>
 
 <div class="card">
     <div class="card-body">
-        <form method="post" action="/admin/vehicle/{{ vehicle.id }}">
+        <form method="post" action="{{ root_path }}/admin/vehicle/{{ vehicle.id }}">
             <div class="row mb-3">
                 <div class="col-md-4">
                     <label for="plate" class="form-label">Matricula</label>
@@ -34,7 +34,7 @@
                 </div>
             </div>
             <button type="submit" class="btn btn-primary">Guardar</button>
-            <a href="/admin" class="btn btn-outline-secondary ms-2">Cancelar</a>
+            <a href="{{ root_path }}/admin" class="btn btn-outline-secondary ms-2">Cancelar</a>
         </form>
     </div>
 </div>

@@ -33,7 +33,7 @@
                         <span class="badge bg-secondary">Conductor</span>
                         {% endif %}
                     </td>
-                    <td><a href="/admin/driver/{{ d.id }}" class="btn btn-sm btn-outline-primary">Editar</a></td>
+                    <td><a href="{{ root_path }}/admin/driver/{{ d.id }}" class="btn btn-sm btn-outline-primary">Editar</a></td>
                 </tr>
                 {% endfor %}
             </tbody>
@@ -65,7 +65,7 @@
                     <td>{{ v.model or '—' }}</td>
                     <td>{{ v.year or '—' }}</td>
                     <td>{{ v.license_number }}</td>
-                    <td><a href="/admin/vehicle/{{ v.id }}" class="btn btn-sm btn-outline-primary">Editar</a></td>
+                    <td><a href="{{ root_path }}/admin/vehicle/{{ v.id }}" class="btn btn-sm btn-outline-primary">Editar</a></td>
                 </tr>
                 {% endfor %}
             </tbody>

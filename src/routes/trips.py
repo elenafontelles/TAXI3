@@ -1,18 +1,15 @@
 # src/routes/trips.py
-import os
 import math
 from fastapi import APIRouter, Request, Depends, Query
 from fastapi.responses import HTMLResponse, RedirectResponse
-from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 from src.routes.auth import get_current_user
 from src.database import get_session
 from src.services.trip_service import get_trips_list
 from src.models.driver import Driver
+from src.template_config import templates, root_path
 
 router = APIRouter()
-templates_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "templates")
-templates = Jinja2Templates(directory=templates_dir)
 
 
 @router.get("/trips", response_class=HTMLResponse)
@@ -26,7 +23,7 @@ async def trips_page(
 ):
     user = get_current_user(request)
     if not user:
-        return RedirectResponse(url="/login", status_code=303)
+        return RedirectResponse(url=f"{root_path}/login", status_code=303)
 
     if order not in ("asc", "desc"):
         order = "desc"

@@ -4,7 +4,6 @@ import re
 import tempfile
 from fastapi import APIRouter, Request, Depends, UploadFile, File, Form
 from fastapi.responses import HTMLResponse, RedirectResponse
-from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 from src.routes.auth import get_current_user
 from src.database import get_session
@@ -14,10 +13,9 @@ from scripts.parsers.uber_parser import parse_uber_csv
 from scripts.parsers.freenow_parser import parse_freenow_csv
 from scripts.parsers.prima_parser import parse_prima_csv
 from src.models.trip import Trip
+from src.template_config import templates, root_path
 
 router = APIRouter()
-templates_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "templates")
-templates = Jinja2Templates(directory=templates_dir)
 
 PARSERS = {
     "uber": parse_uber_csv,
@@ -109,9 +107,9 @@ def _resolve_driver_vehicle(record: dict, lookups: dict, fallback_driver: str, f
 async def upload_page(request: Request, session: Session = Depends(get_session)):
     user = get_current_user(request)
     if not user:
-        return RedirectResponse(url="/login", status_code=303)
+        return RedirectResponse(url=f"{root_path}/login", status_code=303)
     if user.get("role") != "admin":
-        return RedirectResponse(url="/", status_code=303)
+        return RedirectResponse(url=f"{root_path}/", status_code=303)
     drivers = session.query(Driver).filter_by(is_active=True).all()
     vehicles = session.query(Vehicle).filter_by(is_active=True).all()
     return templates.TemplateResponse(request, "upload.html", {
@@ -132,7 +130,7 @@ async def process_upload(
 ):
     user = get_current_user(request)
     if not user or user.get("role") != "admin":
-        return RedirectResponse(url="/login", status_code=303)
+        return RedirectResponse(url=f"{root_path}/login", status_code=303)
 
     parser = PARSERS.get(platform)
     if not parser:

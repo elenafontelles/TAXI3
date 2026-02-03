@@ -5,7 +5,6 @@ import threading
 from datetime import datetime, date, timedelta, timezone
 from fastapi import APIRouter, Request, Depends, Form
 from fastapi.responses import HTMLResponse, RedirectResponse
-from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 from src.routes.auth import get_current_user
 from src.database import get_engine
@@ -14,12 +13,11 @@ from src.models.sync_log import SyncLog
 from src.models.trip import Trip
 from scripts.parsers.freenow_parser import parse_freenow_csv
 from src.routes.upload import _build_lookups, _resolve_driver_vehicle, TRIP_FIELDS
+from src.template_config import templates, root_path
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-templates_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "templates")
-templates = Jinja2Templates(directory=templates_dir)
 
 IMPORTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "imports")
 
@@ -89,9 +87,9 @@ def _import_freenow_csv(csv_path: str, session: Session) -> tuple[int, int, int]
 async def sync_page(request: Request, session: Session = Depends(get_session)):
     user = get_current_user(request)
     if not user:
-        return RedirectResponse(url="/login", status_code=303)
+        return RedirectResponse(url=f"{root_path}/login", status_code=303)
     if user.get("role") != "admin":
-        return RedirectResponse(url="/", status_code=303)
+        return RedirectResponse(url=f"{root_path}/", status_code=303)
 
     platform_status = _get_platform_status(session)
     import_files = _list_import_files()
@@ -171,14 +169,14 @@ async def sync_freenow(
 ):
     user = get_current_user(request)
     if not user or user.get("role") != "admin":
-        return RedirectResponse(url="/login", status_code=303)
+        return RedirectResponse(url=f"{root_path}/login", status_code=303)
 
     # Guard against double-runs
     already_running = (session.query(SyncLog)
                        .filter_by(source="freenow", status="running")
                        .first())
     if already_running:
-        return RedirectResponse(url="/sync", status_code=303)
+        return RedirectResponse(url=f"{root_path}/sync", status_code=303)
 
     # Parse dates (default: yesterday)
     yesterday = date.today() - timedelta(days=1)
@@ -203,4 +201,4 @@ async def sync_freenow(
     )
     thread.start()
 
-    return RedirectResponse(url="/sync", status_code=303)
+    return RedirectResponse(url=f"{root_path}/sync", status_code=303)

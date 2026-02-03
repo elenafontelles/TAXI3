@@ -19,7 +19,7 @@
 <div class="card">
     <div class="card-body">
         <p class="text-muted">Arrastra un archivo CSV o seleccionalo manualmente para importar viajes.</p>
-        <form method="post" action="/upload/process" enctype="multipart/form-data">
+        <form method="post" action="{{ root_path }}/upload/process" enctype="multipart/form-data">
             <div class="row mb-3">
                 <div class="col-md-4">
                     <label for="platform" class="form-label">Plataforma</label>
