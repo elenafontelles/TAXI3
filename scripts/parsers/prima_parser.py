@@ -23,11 +23,26 @@ def _parse_coord(value: str) -> float | None:
     return num
 
 
+def _parse_datetime(value: str) -> datetime:
+    """Parse Prima datetime — handles both real and legacy formats.
+
+    Real export: '02/02/2026 1:19:03' (%d/%m/%Y %H:%M:%S, no leading-zero hour)
+    Legacy:      '27/01/26 9:00'      (%d/%m/%y %H:%M)
+    """
+    value = value.strip()
+    for fmt in ("%d/%m/%Y %H:%M:%S", "%d/%m/%y %H:%M"):
+        try:
+            return datetime.strptime(value, fmt)
+        except ValueError:
+            continue
+    raise ValueError(f"Cannot parse Prima datetime: {value!r}")
+
+
 def parse_prima_csv(filepath: str) -> list[dict]:
     """Parse Prima/Taxitronic trip-level CSV export.
 
     Real format: semicolon-separated, European decimals (comma),
-    dates as d/m/yy H:MM, coordinates as '41.213100N'.
+    dates as d/m/Y H:MM:SS, coordinates as '41.213100N'.
 
     Returns a list of dicts ready for Trip model creation.
     """
@@ -37,12 +52,8 @@ def parse_prima_csv(filepath: str) -> list[dict]:
         for row in reader:
             gross = _parse_decimal(row["AmountTotalPaid"])
 
-            started_at = datetime.strptime(
-                row["DateTripStart"].strip(), "%d/%m/%y %H:%M"
-            )
-            ended_at = datetime.strptime(
-                row["DateTripEnd"].strip(), "%d/%m/%y %H:%M"
-            )
+            started_at = _parse_datetime(row["DateTripStart"])
+            ended_at = _parse_datetime(row["DateTripEnd"])
 
             duration = (ended_at - started_at).total_seconds() / 60
 
