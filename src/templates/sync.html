@@ -102,6 +102,7 @@
                     <th>Plataforma</th>
                     <th>Fecha descarga</th>
                     <th>Tamano</th>
+                    <th></th>
                 </tr>
             </thead>
             <tbody>
@@ -111,10 +112,11 @@
                     <td><span class="badge bg-{{ 'dark' if f.source == 'uber' else 'success' if f.source == 'freenow' else 'warning' }}">{{ f.source|upper }}</span></td>
                     <td>{{ f.modified }}</td>
                     <td>{{ f.size_kb }} KB</td>
+                    <td><a href="{{ root_path }}/sync/files/{{ f.name }}" class="btn btn-outline-secondary btn-sm">Ver</a></td>
                 </tr>
                 {% endfor %}
                 {% if not import_files %}
-                <tr><td colspan="4" class="text-center text-muted">No hay archivos descargados</td></tr>
+                <tr><td colspan="5" class="text-center text-muted">No hay archivos descargados</td></tr>
                 {% endif %}
             </tbody>
         </table>

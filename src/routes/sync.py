@@ -1,9 +1,10 @@
 # src/routes/sync.py
+import csv
 import logging
 import os
 import threading
 from datetime import datetime, date, timedelta, timezone
-from fastapi import APIRouter, Request, Depends, Form
+from fastapi import APIRouter, Request, Depends, Form, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 from src.routes.auth import require_admin
@@ -193,3 +194,40 @@ async def sync_freenow(
     thread.start()
 
     return RedirectResponse(url=f"{root_path}/sync", status_code=303)
+
+
+@router.get("/sync/files/{filename}", response_class=HTMLResponse)
+async def view_import_file(
+    request: Request,
+    filename: str,
+    user: dict = Depends(require_admin),
+):
+    # Security: only allow simple filenames (no path traversal)
+    if "/" in filename or "\\" in filename or ".." in filename:
+        raise HTTPException(status_code=400, detail="Invalid filename")
+    if not filename.endswith(".csv"):
+        raise HTTPException(status_code=400, detail="Only CSV files supported")
+
+    filepath = os.path.join(IMPORTS_DIR, filename)
+    if not os.path.isfile(filepath):
+        raise HTTPException(status_code=404, detail="File not found")
+
+    headers = []
+    rows = []
+    with open(filepath, newline="", encoding="utf-8") as f:
+        # Detect delimiter
+        sample = f.read(4096)
+        f.seek(0)
+        delimiter = ";" if sample.count(";") > sample.count(",") else ","
+        reader = csv.reader(f, delimiter=delimiter)
+        headers = next(reader, [])
+        for row in reader:
+            rows.append(row)
+
+    return templates.TemplateResponse(request, "sync_file_view.html", {
+        "user": user,
+        "filename": filename,
+        "headers": headers,
+        "rows": rows,
+        "total_rows": len(rows),
+    })

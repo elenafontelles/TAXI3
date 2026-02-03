@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}{{ filename }} - TAXI API{% endblock %}
+{% block head_extra %}
+<style>
+.csv-table-wrap {
+    overflow-x: auto;
+    max-height: 75vh;
+    overflow-y: auto;
+}
+.csv-table-wrap table {
+    font-size: 0.8rem;
+    white-space: nowrap;
+}
+.csv-table-wrap thead th {
+    position: sticky;
+    top: 0;
+    background: #343a40;
+    color: #fff;
+    z-index: 1;
+}
+</style>
+{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+        <h5 class="mb-0"><code>{{ filename }}</code></h5>
+        <small class="text-muted">{{ total_rows }} registros &middot; {{ headers|length }} columnas</small>
+    </div>
+    <a href="{{ root_path }}/sync" class="btn btn-outline-secondary btn-sm">Volver a Sincronizar</a>
+</div>
+
+<div class="card">
+    <div class="card-body p-0">
+        <div class="csv-table-wrap">
+            <table class="table table-sm table-striped table-bordered mb-0">
+                <thead>
+                    <tr>
+                        <th class="text-center">#</th>
+                        {% for h in headers %}
+                        <th>{{ h }}</th>
+                        {% endfor %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in rows %}
+                    <tr>
+                        <td class="text-center text-muted">{{ loop.index }}</td>
+                        {% for cell in row %}
+                        <td>{{ cell }}</td>
+                        {% endfor %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
