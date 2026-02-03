@@ -1,5 +1,17 @@
 {% extends "base.html" %}
 {% block title %}Sincronizar - TAXI API{% endblock %}
+{% block head_extra %}
+{% if has_running_sync %}
+<meta http-equiv="refresh" content="5">
+{% endif %}
+<style>
+@keyframes spin { to { transform: rotate(360deg); } }
+.badge-running {
+    animation: spin 1.5s linear infinite;
+    display: inline-block;
+}
+</style>
+{% endblock %}
 {% block content %}
 <h4>Sincronizar</h4>
 
@@ -65,8 +77,9 @@
                        value="{{ default_date }}">
             </div>
             <div class="col-md-3">
-                <button type="submit" class="btn btn-success btn-sm">
-                    Sincronizar FreeNow
+                <button type="submit" class="btn btn-success btn-sm"
+                        {% if has_running_sync %}disabled{% endif %}>
+                    {% if has_running_sync %}Sincronizando...{% else %}Sincronizar FreeNow{% endif %}
                 </button>
             </div>
             <div class="col-md-3">
@@ -138,7 +151,7 @@
                         {% elif log.status == 'error' %}
                         <span class="badge bg-danger">Error</span>
                         {% elif log.status == 'running' %}
-                        <span class="badge bg-info">Ejecutando</span>
+                        <span class="badge bg-info"><span class="badge-running">&#9881;</span> Ejecutando</span>
                         {% else %}
                         <span class="badge bg-secondary">{{ log.status }}</span>
                         {% endif %}
@@ -146,7 +159,7 @@
                     <td>{{ log.records_found or 0 }}</td>
                     <td>{{ log.records_created or 0 }}</td>
                     <td>{{ log.records_skipped or 0 }}</td>
-                    <td>{{ "%.1f"|format(log.duration_seconds) }}s</td>
+                    <td>{% if log.duration_seconds is not none %}{{ "%.1f"|format(log.duration_seconds) }}s{% else %}-{% endif %}</td>
                     <td class="small text-muted">{{ log.error_message or '-' }}</td>
                 </tr>
                 {% endfor %}
