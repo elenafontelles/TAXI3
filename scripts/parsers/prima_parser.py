@@ -38,6 +38,15 @@ def _parse_datetime(value: str) -> datetime:
     raise ValueError(f"Cannot parse Prima datetime: {value!r}")
 
 
+# Taxitronic uses generic codes ("CONDCUTOR 1") instead of real names.
+# Map DriverNum → real driver name for matching against the DB.
+_CONDUCTOR_MAP = {
+    "1": "TAMARA ROSA GOMEZ",
+    "3": "SALVADOR CARMONA CARMONA",
+    "4": "IVAN ALSINA BURGOS",
+}
+
+
 def parse_prima_csv(filepath: str) -> list[dict]:
     """Parse Prima/Taxitronic trip-level CSV export.
 
@@ -87,6 +96,7 @@ def parse_prima_csv(filepath: str) -> list[dict]:
                 ])) or None,
                 "raw_data": dict(row),
                 "_driver_code": row["DriverName"].strip(),
+                "_driver_name": _CONDUCTOR_MAP.get(row.get("DriverNum", "").strip(), ""),
                 "_license": row["License"].strip(),
             })
     return trips
