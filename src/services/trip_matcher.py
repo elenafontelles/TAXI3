@@ -74,12 +74,24 @@ def cross_match_trips(session: Session, driver_id: str | None = None) -> dict:
             Trip.gross_amount < MIN_AMOUNT_THRESHOLD,
             Trip.linked_trip_id.is_(None),
         )
+        .order_by(Trip.started_at)  # Process in chronological order
     )
 
     if driver_id:
         query = query.filter(Trip.driver_id == driver_id)
 
     prima_trips = query.all()
+
+    # Track which app trips have already been linked (1:1 matching)
+    used_app_trip_ids = set()
+
+    # Also get already-linked app trip IDs from DB
+    existing_links = (
+        session.query(Trip.linked_trip_id)
+        .filter(Trip.linked_trip_id.isnot(None))
+        .all()
+    )
+    used_app_trip_ids.update(link[0] for link in existing_links)
 
     stats = {"matched": 0, "already_linked": 0, "no_match": 0, "total": len(prima_trips)}
 
@@ -88,7 +100,8 @@ def cross_match_trips(session: Session, driver_id: str | None = None) -> dict:
         time_start = prima_trip.started_at - timedelta(minutes=TIME_WINDOW_MINUTES)
         time_end = prima_trip.started_at + timedelta(minutes=TIME_WINDOW_MINUTES)
 
-        app_trip = (
+        # Get candidates ordered by time proximity, exclude already-used trips
+        candidates = (
             session.query(Trip)
             .filter(
                 Trip.driver_id == prima_trip.driver_id,
@@ -96,16 +109,25 @@ def cross_match_trips(session: Session, driver_id: str | None = None) -> dict:
                 Trip.started_at >= time_start,
                 Trip.started_at <= time_end,
                 Trip.gross_amount > MIN_AMOUNT_THRESHOLD,
+                ~Trip.id.in_(used_app_trip_ids) if used_app_trip_ids else True,
             )
             .order_by(
                 sa.func.abs(sa.extract("epoch", Trip.started_at - prima_trip.started_at))
             )
-            .first()
+            .all()
         )
 
+        # Find first candidate not already used
+        app_trip = None
+        for candidate in candidates:
+            if candidate.id not in used_app_trip_ids:
+                app_trip = candidate
+                break
+
         if app_trip:
-            # Link the trips
+            # Link the trips and mark app trip as used
             prima_trip.linked_trip_id = app_trip.id
+            used_app_trip_ids.add(app_trip.id)
             stats["matched"] += 1
             logger.debug(
                 f"Linked Prima #{prima_trip.external_id} -> "
