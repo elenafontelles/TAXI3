@@ -120,6 +120,34 @@
     </div>
 </div>
 
+<!-- Cross-match result alert -->
+{% set cross_match_result = request.query_params.get('cross_match_result', '') %}
+{% if cross_match_result %}
+<div class="alert alert-info alert-dismissible fade show">
+    Cruce completado: {{ cross_match_result }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
+
+<!-- Cross-match card -->
+<div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h6 class="mb-0">Cruce de viajes</h6>
+        <span class="badge bg-info">Prima ↔ Apps</span>
+    </div>
+    <div class="card-body">
+        <p class="small text-muted mb-2">
+            Enlaza viajes Prima (importe 0€) con sus equivalentes en FreeNow/Uber.
+            El cruce se ejecuta automaticamente al sincronizar Prima, pero puedes forzarlo manualmente.
+        </p>
+        <form method="post" action="{{ root_path }}/sync/cross-match" class="d-inline">
+            <button type="submit" class="btn btn-info btn-sm">
+                Ejecutar cruce manual
+            </button>
+        </form>
+    </div>
+</div>
+
 <!-- Downloaded files -->
 <div class="card mb-4">
     <div class="card-header">
@@ -147,7 +175,7 @@
                 </tr>
                 {% endfor %}
                 {% if not import_files %}
-                <tr><td colspan="5" class="text-center text-muted">No hay archivos descargados</td></tr>
+                <tr><td colspan="6" class="text-center text-muted">No hay archivos descargados</td></tr>
                 {% endif %}
             </tbody>
         </table>
@@ -169,6 +197,7 @@
                     <th>Encontrados</th>
                     <th>Importados</th>
                     <th>Duplicados</th>
+                    <th>Enlazados</th>
                     <th>Duracion</th>
                     <th>Notas</th>
                 </tr>
@@ -192,12 +221,13 @@
                     <td>{{ log.records_found or 0 }}</td>
                     <td>{{ log.records_created or 0 }}</td>
                     <td>{{ log.records_skipped or 0 }}</td>
+                    <td>{{ log.records_updated or 0 }}</td>
                     <td>{% if log.duration_seconds is not none %}{{ "%.1f"|format(log.duration_seconds) }}s{% else %}-{% endif %}</td>
                     <td class="small text-muted">{{ log.error_message or '-' }}</td>
                 </tr>
                 {% endfor %}
                 {% if not sync_logs %}
-                <tr><td colspan="8" class="text-center text-muted">No hay registros de sincronizacion</td></tr>
+                <tr><td colspan="9" class="text-center text-muted">No hay registros de sincronizacion</td></tr>
                 {% endif %}
             </tbody>
         </table>

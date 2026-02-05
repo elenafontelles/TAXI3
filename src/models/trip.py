@@ -38,5 +38,7 @@ class Trip(Base):
     payment_method: Mapped[str | None] = mapped_column(String(20))
     tariff_code: Mapped[str | None] = mapped_column(String(20))
     raw_data: Mapped[dict | None] = mapped_column(JSON)
+    # Cross-platform linking: Prima trip (0 amount) -> FreeNow/Uber trip (with amount)
+    linked_trip_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("trips.id"), index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))

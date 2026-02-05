@@ -249,14 +249,27 @@ def _run_prima_sync(log_id: int, sd: date, ed: date):
 
         created, skipped, unmatched = _import_prima_csv(csv_path, session)
 
+        # Cross-match Prima trips (amount=0) with FreeNow/Uber
+        from src.services.trip_matcher import cross_match_trips
+        match_stats = cross_match_trips(session)
+
         log.status = "success"
         log.records_found = created + skipped + unmatched
         log.records_created = created
         log.records_skipped = skipped
+        log.records_updated = match_stats["matched"]  # trips linked
         log.completed_at = datetime.now(timezone.utc)
         log.duration_seconds = (log.completed_at - started_at).total_seconds()
+
+        messages = []
         if unmatched:
-            log.error_message = f"{unmatched} viajes sin conductor/vehiculo asignado"
+            messages.append(f"{unmatched} viajes sin conductor/vehiculo")
+        if match_stats["matched"]:
+            messages.append(f"{match_stats['matched']} enlazados con app")
+        if match_stats["no_match"]:
+            messages.append(f"{match_stats['no_match']} sin enlace (posible Uber)")
+        if messages:
+            log.error_message = ", ".join(messages)
         session.commit()
 
     except Exception as e:
@@ -312,6 +325,24 @@ async def sync_prima(
     thread.start()
 
     return RedirectResponse(url=f"{root_path}/sync", status_code=303)
+
+
+@router.post("/sync/cross-match", response_class=HTMLResponse)
+async def cross_match(
+    request: Request,
+    user: dict = Depends(require_admin),
+    session: Session = Depends(get_session),
+):
+    """Manually run cross-matching of Prima trips with FreeNow/Uber."""
+    from src.services.trip_matcher import cross_match_trips
+    stats = cross_match_trips(session)
+
+    # Redirect back with result in query params
+    msg = f"Enlazados: {stats['matched']}, Sin enlace: {stats['no_match']}"
+    return RedirectResponse(
+        url=f"{root_path}/sync?cross_match_result={msg}",
+        status_code=303,
+    )
 
 
 @router.get("/sync/files/{filename}", response_class=HTMLResponse)
