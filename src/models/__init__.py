@@ -10,6 +10,7 @@ from src.models.daily_summary import DailySummary
 from src.models.platform_token import PlatformToken
 from src.models.dsr_request import DsrRequest
 from src.models.pending_validation import PendingValidation
+from src.models.visa_payment import VisaPayment
 
 __all__ = [
     "Owner",
@@ -23,4 +24,5 @@ __all__ = [
     "PlatformToken",
     "DsrRequest",
     "PendingValidation",
+    "VisaPayment",
 ]
