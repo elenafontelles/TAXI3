@@ -15,6 +15,67 @@
 
 {% block content %}
 <h4>Viajes</h4>
+
+{% if user.role == 'admin' %}
+<!-- Manual Uber trip entry form -->
+<div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h6 class="mb-0">Nuevo viaje Uber (manual)</h6>
+        <span class="badge bg-dark">Uber</span>
+    </div>
+    <div class="card-body">
+        <form method="post" action="{{ root_path }}/trips/uber" class="row g-2 align-items-end">
+            <div class="col-md-2">
+                <label class="form-label small">Fecha</label>
+                <input type="date" class="form-control form-control-sm" name="trip_date" required>
+            </div>
+            <div class="col-md-1">
+                <label class="form-label small">Hora</label>
+                <input type="time" class="form-control form-control-sm" name="trip_time" value="12:00" required>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small">Conductor</label>
+                <select class="form-select form-select-sm" name="driver_id" required>
+                    <option value="">Seleccionar...</option>
+                    {% for d in drivers %}
+                    <option value="{{ d.id }}">{{ d.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small">Vehiculo</label>
+                <select class="form-select form-select-sm" name="vehicle_id" required>
+                    <option value="">Seleccionar...</option>
+                    {% for v in vehicles %}
+                    <option value="{{ v.id }}">{{ v.plate }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-1">
+                <label class="form-label small">Importe</label>
+                <input type="text" class="form-control form-control-sm" name="gross_amount" placeholder="0.00" required>
+            </div>
+            <div class="col-md-1">
+                <label class="form-label small">Propina</label>
+                <input type="text" class="form-control form-control-sm" name="tips" placeholder="0.00" value="0">
+            </div>
+            <div class="col-md-1">
+                <label class="form-label small">Pago</label>
+                <select class="form-select form-select-sm" name="payment_method">
+                    <option value="">-</option>
+                    <option value="card">Tarjeta</option>
+                    <option value="cash">Efectivo</option>
+                    <option value="apple_pay">Apple Pay</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <button type="submit" class="btn btn-dark btn-sm w-100">Guardar viaje</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endif %}
+
 <div class="card">
     <div class="card-body">
         <form method="get" action="{{ root_path }}/trips" class="row mb-3">
