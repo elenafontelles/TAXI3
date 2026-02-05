@@ -110,16 +110,35 @@ class PrimaScraper(BaseScraper):
                 cond_hasta.select_option(value=last_val)
 
             # 4) Set date range (DD/MM/YYYY text inputs)
-            #    ASP.NET AJAX CalendarExtender intercepts clicks — set values
-            #    via JavaScript to bypass the calendar popup entirely.
+            #    ASP.NET AJAX CalendarExtender intercepts clicks — clear field,
+            #    fill with Playwright, then trigger change events.
             start_str = self.start_date.strftime("%d/%m/%Y")
             end_str = self.end_date.strftime("%d/%m/%Y")
             print(f"4. Setting date range: {start_str} - {end_str}")
 
-            page.evaluate(f"""() => {{
-                document.getElementById('ctl00_ContentPlaceHolder1_txTurnoDesde').value = '{start_str}';
-                document.getElementById('ctl00_ContentPlaceHolder1_txTurnoHasta').value = '{end_str}';
-            }}""")
+            # Clear and fill start date
+            start_input = page.locator('#ctl00_ContentPlaceHolder1_txTurnoDesde')
+            start_input.click()
+            start_input.fill('')
+            start_input.fill(start_str)
+            start_input.dispatch_event('change')
+            start_input.dispatch_event('blur')
+
+            # Clear and fill end date
+            end_input = page.locator('#ctl00_ContentPlaceHolder1_txTurnoHasta')
+            end_input.click()
+            end_input.fill('')
+            end_input.fill(end_str)
+            end_input.dispatch_event('change')
+            end_input.dispatch_event('blur')
+
+            # Wait for any ASP.NET postback
+            page.wait_for_timeout(1000)
+
+            # Verify values were set correctly
+            actual_start = start_input.input_value()
+            actual_end = end_input.input_value()
+            print(f"   Verified: {actual_start} - {actual_end}")
 
             # 5) Click search (Buscar)
             print("5. Clicking Buscar...")
