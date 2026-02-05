@@ -12,6 +12,7 @@ from src.models.dsr_request import DsrRequest
 from src.models.pending_validation import PendingValidation
 from src.models.visa_payment import VisaPayment
 from src.models.fuel_expense import FuelExpense
+from src.models.other_expense import OtherExpense
 
 __all__ = [
     "Owner",
@@ -27,4 +28,5 @@ __all__ = [
     "PendingValidation",
     "VisaPayment",
     "FuelExpense",
+    "OtherExpense",
 ]
