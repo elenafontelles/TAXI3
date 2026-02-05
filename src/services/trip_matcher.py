@@ -14,7 +14,9 @@ from src.models.trip import Trip
 logger = logging.getLogger(__name__)
 
 # Matching criteria
-TIME_WINDOW_MINUTES = 5  # Max time difference for matching
+# Note: Using 65 min window to handle timezone discrepancies between platforms
+# Prima stores UTC, FreeNow may have local time (UTC+1 in Spain)
+TIME_WINDOW_MINUTES = 65  # Max time difference for matching
 MIN_AMOUNT_THRESHOLD = 0.01  # Prima trips below this are considered "app trips"
 
 
