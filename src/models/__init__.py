@@ -9,6 +9,7 @@ from src.models.freenow_import import FreeNowImport
 from src.models.daily_summary import DailySummary
 from src.models.platform_token import PlatformToken
 from src.models.dsr_request import DsrRequest
+from src.models.pending_validation import PendingValidation
 
 __all__ = [
     "Owner",
@@ -21,4 +22,5 @@ __all__ = [
     "DailySummary",
     "PlatformToken",
     "DsrRequest",
+    "PendingValidation",
 ]
