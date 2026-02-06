@@ -1,0 +1,180 @@
+{% extends "base.html" %}
+{% block title %}Liquidacion - TAXI API{% endblock %}
+{% block head_extra %}
+<style>
+    .settlement-table {
+        font-size: 0.85rem;
+    }
+    .settlement-table th,
+    .settlement-table td {
+        text-align: right;
+        padding: 0.4rem 0.5rem;
+        white-space: nowrap;
+    }
+    .settlement-table th:first-child,
+    .settlement-table td:first-child {
+        text-align: left;
+    }
+    .settlement-table .totals-row {
+        font-weight: bold;
+        background-color: #f8f9fa;
+        border-top: 2px solid #dee2e6;
+    }
+    .negative {
+        color: #dc3545;
+    }
+    .positive {
+        color: #198754;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<h4>Liquidacion</h4>
+
+{% if pending_count > 0 %}
+<div class="alert alert-warning" role="alert">
+    <strong>Atencion:</strong> Hay {{ pending_count }} elemento(s) pendiente(s) de validacion.
+    <a href="{{ root_path }}/validacion" class="alert-link">Revisar validaciones</a>
+</div>
+{% endif %}
+
+<div class="card mb-4">
+    <div class="card-header">Generar Cierre</div>
+    <div class="card-body">
+        <form method="get" action="{{ root_path }}/liquidacion">
+            <div class="row mb-3">
+                <div class="col-md-4">
+                    <label for="driver_id" class="form-label">Conductor</label>
+                    <select class="form-select" id="driver_id" name="driver_id" required>
+                        <option value="">Seleccionar conductor...</option>
+                        {% for d in drivers %}
+                        <option value="{{ d.id }}" {% if driver_id == d.id %}selected{% endif %}>
+                            {{ d.name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label for="start_date" class="form-label">Fecha inicio</label>
+                    <input type="date" class="form-control" id="start_date" name="start_date"
+                           value="{{ start_date }}" required>
+                </div>
+                <div class="col-md-3">
+                    <label for="end_date" class="form-label">Fecha fin</label>
+                    <input type="date" class="form-control" id="end_date" name="end_date"
+                           value="{{ end_date }}" required>
+                </div>
+                <div class="col-md-2 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary w-100">Generar cierre</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% if results %}
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span>Cierre: {{ selected_driver.name if selected_driver else '' }} ({{ start_date }} - {{ end_date }})</span>
+        <form method="post" action="{{ root_path }}/liquidacion/export" class="d-inline">
+            <input type="hidden" name="driver_id" value="{{ driver_id }}">
+            <input type="hidden" name="start_date" value="{{ start_date }}">
+            <input type="hidden" name="end_date" value="{{ end_date }}">
+            <button type="submit" class="btn btn-success btn-sm">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-file-earmark-excel me-1" viewBox="0 0 16 16">
+                    <path d="M5.884 6.68a.5.5 0 1 0-.768.64L7.349 10l-2.233 2.68a.5.5 0 0 0 .768.64L8 10.781l2.116 2.54a.5.5 0 0 0 .768-.641L8.651 10l2.233-2.68a.5.5 0 0 0-.768-.64L8 9.219l-2.116-2.54z"/>
+                    <path d="M14 14V4.5L9.5 0H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2M9.5 3A1.5 1.5 0 0 0 11 4.5h2V14a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1h5.5z"/>
+                </svg>
+                Exportar Excel
+            </button>
+        </form>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-striped table-hover settlement-table mb-0">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Fecha</th>
+                        <th>Rec. Prima</th>
+                        <th>Rec. FreeNow</th>
+                        <th>Rec. Uber</th>
+                        <th>Rec. TOTAL</th>
+                        <th>VISA</th>
+                        <th>Pago APP FN</th>
+                        <th>Pago APP Uber</th>
+                        <th>Cash</th>
+                        <th>IVA</th>
+                        <th>%</th>
+                        <th>Parte Cond.</th>
+                        <th>Deuda</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for r in results %}
+                    <tr>
+                        <td>{{ r.date.strftime('%d/%m/%Y') }}</td>
+                        <td>{{ "%.2f"|format(r.prima_amount) }}</td>
+                        <td>{{ "%.2f"|format(r.freenow_net) }}</td>
+                        <td>{{ "%.2f"|format(r.uber_net) }}</td>
+                        <td>{{ "%.2f"|format(r.rec_total) }}</td>
+                        <td>{{ "%.2f"|format(r.visa_total) }}</td>
+                        <td>{{ "%.2f"|format(r.freenow_app_paid) }}</td>
+                        <td>{{ "%.2f"|format(r.uber_app_paid) }}</td>
+                        <td>{{ "%.2f"|format(r.cash) }}</td>
+                        <td>{{ "%.2f"|format(r.vat) }}</td>
+                        <td>{{ "%.0f"|format(r.driver_pct) }}%</td>
+                        <td>{{ "%.2f"|format(r.driver_share) }}</td>
+                        <td class="{% if r.debt > 0 %}positive{% elif r.debt < 0 %}negative{% endif %}">
+                            {{ "%.2f"|format(r.debt) }}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot>
+                    <tr class="totals-row">
+                        <td>TOTALES</td>
+                        <td>{{ "%.2f"|format(totals.prima_amount) }}</td>
+                        <td>{{ "%.2f"|format(totals.freenow_net) }}</td>
+                        <td>{{ "%.2f"|format(totals.uber_net) }}</td>
+                        <td>{{ "%.2f"|format(totals.rec_total) }}</td>
+                        <td>{{ "%.2f"|format(totals.visa_total) }}</td>
+                        <td>{{ "%.2f"|format(totals.freenow_app_paid) }}</td>
+                        <td>{{ "%.2f"|format(totals.uber_app_paid) }}</td>
+                        <td>{{ "%.2f"|format(totals.cash) }}</td>
+                        <td>{{ "%.2f"|format(totals.vat) }}</td>
+                        <td>-</td>
+                        <td>{{ "%.2f"|format(totals.driver_share) }}</td>
+                        <td class="{% if totals.debt > 0 %}positive{% elif totals.debt < 0 %}negative{% endif %}">
+                            {{ "%.2f"|format(totals.debt) }}
+                        </td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+</div>
+
+{% if totals.debt %}
+<div class="card mt-4">
+    <div class="card-body">
+        <h5 class="card-title">Resumen Final</h5>
+        <p class="card-text">
+            {% if totals.debt > 0 %}
+            <span class="fs-4 positive">El propietario debe al conductor: <strong>{{ "%.2f"|format(totals.debt) }} EUR</strong></span>
+            {% elif totals.debt < 0 %}
+            <span class="fs-4 negative">El conductor debe al propietario: <strong>{{ "%.2f"|format(totals.debt|abs) }} EUR</strong></span>
+            {% else %}
+            <span class="fs-4">Saldo liquidado: <strong>0.00 EUR</strong></span>
+            {% endif %}
+        </p>
+    </div>
+</div>
+{% endif %}
+
+{% elif driver_id and start_date and end_date %}
+<div class="alert alert-info" role="alert">
+    No se encontraron datos para el periodo seleccionado.
+</div>
+{% endif %}
+{% endblock %}

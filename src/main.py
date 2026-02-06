@@ -15,6 +15,7 @@ from src.routes.upload import router as upload_router
 from src.routes.sync import router as sync_router
 from src.routes.admin import router as admin_router
 from src.routes.validation import router as validation_router
+from src.routes.liquidacion import router as liquidacion_router
 
 settings = get_settings()
 
@@ -55,6 +56,7 @@ app.include_router(upload_router)
 app.include_router(sync_router)
 app.include_router(admin_router)
 app.include_router(validation_router)
+app.include_router(liquidacion_router)
 
 
 @app.get("/health")
