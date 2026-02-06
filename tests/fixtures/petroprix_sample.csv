@@ -1,0 +1,14 @@
+,fecha,matricula,tipo_vehiculo,combustible,nombre,direccion,cp,litros,importe_cob,km,tipo_pago
+,30-01-2026 14:22:19,0397MSS,0,Gasolina,Barcelona,C/ Badajoz 108,08018,30,82,40,00,1,Tarjeta
+,28-01-2026 00:09:15,0397MSS,0,Gasolina,Barcelona,C/ Badajoz 108,08018,23,29,30,00,-1,Efectivo
+,23-01-2026 18:00:39,0397MSS,0,Gasolina,Barcelona,C/ Badajoz 108,08018,31,55,40,00,-1,Efectivo
+,21-01-2026 13:11:20,0397MSS,0,Gasolina,Barcelona,C/ Badajoz 108,08018,31,80,40,00,-1,Efectivo
+,18-01-2026 17:51:57,0397MSS,0,Gasolina,Barcelona,C/ Badajoz 108,08018,24,04,30,00,-1,Efectivo
+,16-01-2026 13:27:45,0397MSS,0,Gasolina,Barcelona,C/ Badajoz 108,08018,32,05,40,00,-1,Efectivo
+,14-01-2026 15:22:38,0397MSS,0,Gasolina,Barcelona,C/ Badajoz 108,08018,24,04,30,00,-1,Efectivo
+,10-01-2026 23:20:03,0397MSS,0,Gasolina,Barcelona,C/ Badajoz 108,08018,32,05,40,00,-1,Efectivo
+,09-01-2026 21:24:20,0397MSS,0,Gasolina,Barcelona,C/ Badajoz 108,08018,16,03,20,00,-1,Efectivo
+,08-01-2026 06:15:08,0397MSS,0,Gasolina,Barcelona,C/ Badajoz 108,08018,24,04,30,00,-1,Efectivo
+,06-01-2026 14:07:34,0397MSS,0,Gasolina,Barcelona,C/ Badajoz 108,08018,32,05,40,00,1,Tarjeta
+,03-01-2026 03:12:56,0397MSS,0,Gasolina,Barcelona,C/ Badajoz 108,08018,24,04,30,00,1,Tarjeta
+,01-01-2026 17:38:34,0397MSS,0,Gasolina,Barcelona,C/ Badajoz 108,08018,24,04,30,00,-1,Efectivo
