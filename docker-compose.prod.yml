@@ -66,5 +66,9 @@ services:
 
 volumes:
   taxi_pg_data:
+    external:
+      name: taxi-api_taxi_pg_data
   taxi_redis_data:
   taxi_imports:
+    external:
+      name: taxi-api_taxi_imports
