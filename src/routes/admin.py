@@ -49,6 +49,11 @@ async def update_driver(
     email: str = Form(None),
     phone: str = Form(None),
     license_number: str = Form(...),
+    commission_base_pct: float = Form(None),
+    commission_bonus_pct: float = Form(None),
+    commission_threshold: float = Form(None),
+    freenow_commission_driver_pct: float = Form(None),
+    uber_commission_driver_pct: float = Form(None),
     session: Session = Depends(get_session),
 ):
     driver = session.query(Driver).get(driver_id)
@@ -57,6 +62,11 @@ async def update_driver(
         driver.email = email or None
         driver.phone = phone or None
         driver.license_number = license_number
+        driver.commission_base_pct = commission_base_pct if commission_base_pct is not None else 40
+        driver.commission_bonus_pct = commission_bonus_pct if commission_bonus_pct is not None else 45
+        driver.commission_threshold = commission_threshold if commission_threshold is not None else 300
+        driver.freenow_commission_driver_pct = freenow_commission_driver_pct if freenow_commission_driver_pct is not None else 0
+        driver.uber_commission_driver_pct = uber_commission_driver_pct if uber_commission_driver_pct is not None else 0
         session.commit()
     return RedirectResponse(url=request.scope.get("root_path", "") + "/admin", status_code=303)
 
