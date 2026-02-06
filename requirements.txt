@@ -28,3 +28,7 @@ pdfplumber==0.11.9
 
 # Browser automation
 playwright==1.49.0
+
+# Job queue
+arq>=0.26
+redis>=5.0

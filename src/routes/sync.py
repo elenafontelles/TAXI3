@@ -2,13 +2,11 @@
 import csv
 import logging
 import os
-import threading
 from datetime import datetime, date, timedelta, timezone
 from fastapi import APIRouter, Request, Depends, Form, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 from src.routes.auth import require_admin
-from src.database import get_engine
 from src.database import get_session
 from src.models.sync_log import SyncLog
 from src.models.trip import Trip
@@ -16,6 +14,7 @@ from scripts.parsers.freenow_parser import parse_freenow_csv
 from scripts.parsers.prima_parser import parse_prima_csv
 from src.routes.upload import _build_lookups, _resolve_driver_vehicle, TRIP_FIELDS
 from src.template_config import templates, root_path
+from src.services.job_service import enqueue_sync
 
 logger = logging.getLogger(__name__)
 
@@ -107,55 +106,6 @@ async def sync_page(request: Request, user: dict = Depends(require_admin), sessi
     })
 
 
-def _run_freenow_sync(log_id: int, sd: date, ed: date):
-    """Background thread: run scraper + import, update SyncLog when done."""
-    from sqlalchemy.orm import sessionmaker
-    engine = get_engine()
-    SessionLocal = sessionmaker(bind=engine)
-    session = SessionLocal()
-    try:
-        log = session.get(SyncLog, log_id)
-        started_at = log.started_at
-
-        from scrapers.freenow_scraper import FreeNowScraper
-        scraper = FreeNowScraper(start_date=sd, end_date=ed)
-        csv_path = scraper.run()
-
-        if not csv_path:
-            log.status = "error"
-            log.error_message = "No se pudo descargar el CSV (sin datos o credenciales incorrectas)"
-            log.completed_at = datetime.now(timezone.utc)
-            log.duration_seconds = (log.completed_at - started_at).total_seconds()
-            session.commit()
-            return
-
-        created, skipped, unmatched = _import_freenow_csv(csv_path, session)
-
-        log.status = "success"
-        log.records_found = created + skipped + unmatched
-        log.records_created = created
-        log.records_skipped = skipped
-        log.completed_at = datetime.now(timezone.utc)
-        log.duration_seconds = (log.completed_at - started_at).total_seconds()
-        if unmatched:
-            log.error_message = f"{unmatched} viajes sin conductor/vehiculo asignado"
-        session.commit()
-
-    except Exception as e:
-        logger.exception("FreeNow sync failed")
-        try:
-            log = session.get(SyncLog, log_id)
-            log.status = "error"
-            log.error_message = str(e)[:500]
-            log.completed_at = datetime.now(timezone.utc)
-            log.duration_seconds = (log.completed_at - log.started_at).total_seconds()
-            session.commit()
-        except Exception:
-            logger.exception("Failed to update SyncLog after error")
-    finally:
-        session.close()
-
-
 @router.post("/sync/freenow", response_class=HTMLResponse)
 async def sync_freenow(
     request: Request,
@@ -186,13 +136,8 @@ async def sync_freenow(
     session.commit()
     log_id = log.id
 
-    # Spawn background thread (sync Playwright works fine outside the asyncio loop)
-    thread = threading.Thread(
-        target=_run_freenow_sync,
-        args=(log_id, sd, ed),
-        daemon=True,
-    )
-    thread.start()
+    # Enqueue job to Redis (processed by Arq worker)
+    await enqueue_sync("freenow", log_id, sd, ed)
 
     return RedirectResponse(url=f"{root_path}/sync", status_code=303)
 
@@ -225,68 +170,6 @@ def _import_prima_csv(csv_path: str, session: Session) -> tuple[int, int, int]:
     return created, skipped, unmatched
 
 
-def _run_prima_sync(log_id: int, sd: date, ed: date):
-    """Background thread: run Prima scraper + import, update SyncLog when done."""
-    from sqlalchemy.orm import sessionmaker
-    engine = get_engine()
-    SessionLocal = sessionmaker(bind=engine)
-    session = SessionLocal()
-    try:
-        log = session.get(SyncLog, log_id)
-        started_at = log.started_at
-
-        from scrapers.prima_scraper import PrimaScraper
-        scraper = PrimaScraper(start_date=sd, end_date=ed)
-        csv_path = scraper.run()
-
-        if not csv_path:
-            log.status = "error"
-            log.error_message = "No se pudo descargar el CSV (sin datos o credenciales incorrectas)"
-            log.completed_at = datetime.now(timezone.utc)
-            log.duration_seconds = (log.completed_at - started_at).total_seconds()
-            session.commit()
-            return
-
-        created, skipped, unmatched = _import_prima_csv(csv_path, session)
-
-        # Cross-match Prima trips (amount=0) with FreeNow/Uber
-        from src.services.trip_matcher import cross_match_trips
-        match_stats = cross_match_trips(session)
-
-        log.status = "success"
-        log.records_found = created + skipped + unmatched
-        log.records_created = created
-        log.records_skipped = skipped
-        log.records_updated = match_stats["matched"]  # trips linked
-        log.completed_at = datetime.now(timezone.utc)
-        log.duration_seconds = (log.completed_at - started_at).total_seconds()
-
-        messages = []
-        if unmatched:
-            messages.append(f"{unmatched} viajes sin conductor/vehiculo")
-        if match_stats["matched"]:
-            messages.append(f"{match_stats['matched']} enlazados con app")
-        if match_stats["no_match"]:
-            messages.append(f"{match_stats['no_match']} sin enlace (posible Uber)")
-        if messages:
-            log.error_message = ", ".join(messages)
-        session.commit()
-
-    except Exception as e:
-        logger.exception("Prima sync failed")
-        try:
-            log = session.get(SyncLog, log_id)
-            log.status = "error"
-            log.error_message = str(e)[:500]
-            log.completed_at = datetime.now(timezone.utc)
-            log.duration_seconds = (log.completed_at - log.started_at).total_seconds()
-            session.commit()
-        except Exception:
-            logger.exception("Failed to update SyncLog after error")
-    finally:
-        session.close()
-
-
 @router.post("/sync/prima", response_class=HTMLResponse)
 async def sync_prima(
     request: Request,
@@ -317,12 +200,8 @@ async def sync_prima(
     session.commit()
     log_id = log.id
 
-    thread = threading.Thread(
-        target=_run_prima_sync,
-        args=(log_id, sd, ed),
-        daemon=True,
-    )
-    thread.start()
+    # Enqueue job to Redis (processed by Arq worker)
+    await enqueue_sync("prima", log_id, sd, ed)
 
     return RedirectResponse(url=f"{root_path}/sync", status_code=303)
 

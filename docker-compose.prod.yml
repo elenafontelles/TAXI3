@@ -16,6 +16,18 @@ services:
       timeout: 5s
       retries: 5
 
+  taxi-redis:
+    image: redis:7-alpine
+    container_name: taxi-redis
+    restart: unless-stopped
+    volumes:
+      - taxi_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   taxi-api:
     image: ghcr.io/ivantintore/taxi-api:latest
     container_name: taxi-api
@@ -23,15 +35,36 @@ services:
     env_file: .env
     environment:
       DATABASE_URL: postgresql://taxi:${DB_PASSWORD}@taxi-db:5432/taxi_api
+      REDIS_URL: redis://taxi-redis:6379
       ROOT_PATH: /tools3/taxi
     ports:
       - "127.0.0.1:8010:8000"
     depends_on:
       taxi-db:
         condition: service_healthy
+      taxi-redis:
+        condition: service_healthy
+    volumes:
+      - taxi_imports:/app/imports
+
+  taxi-worker:
+    image: ghcr.io/ivantintore/taxi-api:latest
+    container_name: taxi-worker
+    command: arq src.workers.settings.WorkerSettings
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://taxi:${DB_PASSWORD}@taxi-db:5432/taxi_api
+      REDIS_URL: redis://taxi-redis:6379
+    depends_on:
+      taxi-db:
+        condition: service_healthy
+      taxi-redis:
+        condition: service_healthy
     volumes:
       - taxi_imports:/app/imports
 
 volumes:
   taxi_pg_data:
+  taxi_redis_data:
   taxi_imports:
