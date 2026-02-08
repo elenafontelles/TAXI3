@@ -1,6 +1,7 @@
 # src/workers/settings.py
 """Arq worker settings and configuration."""
 from arq.connections import RedisSettings
+from arq.cron import cron
 
 
 def get_redis_settings() -> RedisSettings:
@@ -15,8 +16,13 @@ class WorkerSettings:
 
     # Import tasks here to register them
     from src.workers.tasks import sync_freenow, sync_prima
+    from src.workers.tasks import scheduled_sync_freenow, scheduled_sync_prima
 
     functions = [sync_freenow, sync_prima]
+    cron_jobs = [
+        cron(scheduled_sync_freenow, hour=2, minute=0),   # Daily at 02:00 UTC
+        cron(scheduled_sync_prima, hour=2, minute=5),      # Daily at 02:05 UTC
+    ]
     redis_settings = get_redis_settings()
     max_jobs = 2  # Limit concurrent jobs (scrapers are resource-heavy)
     job_timeout = 600  # 10 minutes max per job

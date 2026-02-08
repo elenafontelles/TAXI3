@@ -61,6 +61,7 @@ def _import_freenow_csv(csv_path: str, session: Session) -> tuple[int, int, int]
     records = parse_freenow_csv(csv_path)
     lookups = _build_lookups(session)
     created = skipped = unmatched = 0
+    new_trip_ids = []
 
     for t in records:
         existing = session.query(Trip).filter_by(
@@ -78,9 +79,16 @@ def _import_freenow_csv(csv_path: str, session: Session) -> tuple[int, int, int]
         trip = Trip(driver_id=row_driver, vehicle_id=row_vehicle,
                     raw_data=t.get("raw_data"), **model_data)
         session.add(trip)
+        session.flush()
+        new_trip_ids.append(trip.id)
         created += 1
 
     session.commit()
+
+    # Auto-detect incidents
+    from src.services.incident_detector import create_incident_validations
+    create_incident_validations(session, new_trip_ids)
+
     return created, skipped, unmatched
 
 
@@ -147,6 +155,7 @@ def _import_prima_csv(csv_path: str, session: Session) -> tuple[int, int, int]:
     records = parse_prima_csv(csv_path)
     lookups = _build_lookups(session)
     created = skipped = unmatched = 0
+    new_trip_ids = []
 
     for t in records:
         existing = session.query(Trip).filter_by(
@@ -164,9 +173,16 @@ def _import_prima_csv(csv_path: str, session: Session) -> tuple[int, int, int]:
         trip = Trip(driver_id=row_driver, vehicle_id=row_vehicle,
                     raw_data=t.get("raw_data"), **model_data)
         session.add(trip)
+        session.flush()
+        new_trip_ids.append(trip.id)
         created += 1
 
     session.commit()
+
+    # Auto-detect incidents
+    from src.services.incident_detector import create_incident_validations
+    create_incident_validations(session, new_trip_ids)
+
     return created, skipped, unmatched
 
 

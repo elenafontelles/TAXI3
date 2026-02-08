@@ -1,4 +1,5 @@
 # src/routes/upload.py
+import logging
 import os
 import re
 import tempfile
@@ -13,7 +14,11 @@ from scripts.parsers.uber_parser import parse_uber_csv
 from scripts.parsers.freenow_parser import parse_freenow_csv
 from scripts.parsers.prima_parser import parse_prima_csv
 from src.models.trip import Trip
+from src.models.visa_payment import VisaPayment
+from src.models.pending_validation import PendingValidation
 from src.template_config import templates
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -124,6 +129,10 @@ async def process_upload(
     csv_file: UploadFile = File(...),
     session: Session = Depends(get_session),
 ):
+    # La Caixa VISA upload (XLSX, different flow)
+    if platform == "lacaixa":
+        return await _process_lacaixa(request, user, vehicle_id, csv_file, session)
+
     parser = PARSERS.get(platform)
     if not parser:
         return await _render_result(request, session, user, error="Plataforma no reconocida")
@@ -146,6 +155,7 @@ async def process_upload(
     created = 0
     skipped = 0
     unmatched = 0
+    new_trip_ids = []
 
     for t in records:
         existing = session.query(Trip).filter_by(external_id=t["external_id"], source=t["source"]).first()
@@ -161,13 +171,148 @@ async def process_upload(
         model_data = {k: v for k, v in t.items() if k in TRIP_FIELDS}
         trip = Trip(driver_id=row_driver, vehicle_id=row_vehicle, raw_data=t.get("raw_data"), **model_data)
         session.add(trip)
+        session.flush()
+        new_trip_ids.append(trip.id)
         created += 1
 
     session.commit()
 
+    # Auto-detect incidents in newly imported trips
+    from src.services.incident_detector import create_incident_validations
+    incidents = create_incident_validations(session, new_trip_ids)
+
     msg = f"Importados: {created} registros. Duplicados omitidos: {skipped}."
     if unmatched:
         msg += f" Sin asignar (conductor/vehiculo no encontrado): {unmatched}."
+    if incidents:
+        msg += f" Incidencias detectadas: {incidents}."
+    return await _render_result(request, session, user, success=msg)
+
+
+async def _process_lacaixa(request, user, vehicle_id, csv_file, session):
+    """Handle La Caixa VISA XLSX upload: import payments and auto-match to trips."""
+    suffix = ".xlsx" if csv_file.filename and csv_file.filename.endswith(".xlsx") else ".csv"
+    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+        content = await csv_file.read()
+        tmp.write(content)
+        tmp_path = tmp.name
+
+    try:
+        from scripts.parsers.lacaixa_parser import parse_lacaixa_xlsx
+        records = parse_lacaixa_xlsx(tmp_path)
+    except Exception as e:
+        os.unlink(tmp_path)
+        return await _render_result(request, session, user, error=f"Error al parsear La Caixa XLSX: {e}")
+
+    os.unlink(tmp_path)
+
+    if not records:
+        return await _render_result(request, session, user, error="No se encontraron registros en el archivo")
+
+    # Resolve vehicle from license in file or form selection
+    license_num = records[0].get("_license")
+    if not vehicle_id and license_num:
+        lookups = _build_lookups(session)
+        vehicle_id = lookups["license_to_vehicle"].get(license_num.lstrip("0"), "")
+
+    if not vehicle_id:
+        return await _render_result(request, session, user, error="No se pudo determinar el vehiculo. Selecciona uno manualmente.")
+
+    source_file = csv_file.filename or "lacaixa_upload"
+    created = 0
+    skipped = 0
+    new_payment_ids = []
+
+    for rec in records:
+        # Deduplicate by date+time+amount+card
+        existing = session.query(VisaPayment).filter_by(
+            date=rec["date"], time=rec["time"],
+            amount=rec["amount"], card_last4=rec["card_last4"],
+            vehicle_id=vehicle_id,
+        ).first()
+        if existing:
+            skipped += 1
+            continue
+
+        payment = VisaPayment(
+            date=rec["date"],
+            time=rec["time"],
+            terminal_id=rec["terminal_id"],
+            card_last4=rec["card_last4"],
+            brand=rec["brand"],
+            amount=rec["amount"],
+            vehicle_id=vehicle_id,
+            source_file=source_file,
+        )
+        session.add(payment)
+        session.flush()
+        new_payment_ids.append(payment.id)
+        created += 1
+
+    session.commit()
+
+    # Auto-match VISA payments to trips
+    from src.services.visa_matcher import match_visa_to_trip
+    matched = 0
+    unmatched_ids = []
+
+    from datetime import datetime, timedelta
+
+    for pid in new_payment_ids:
+        payment = session.get(VisaPayment, pid)
+        if not payment:
+            continue
+
+        # Find trips on the same day for the same vehicle
+        day_start = datetime.combine(payment.date, datetime.min.time())
+        day_end = day_start + timedelta(days=1)
+        trips = session.query(Trip).filter(
+            Trip.vehicle_id == vehicle_id,
+            Trip.started_at >= day_start,
+            Trip.started_at < day_end,
+        ).all()
+
+        trip_dicts = [
+            {"id": t.id, "ended_at": t.ended_at, "gross_amount": float(t.gross_amount)}
+            for t in trips if t.ended_at
+        ]
+
+        result = match_visa_to_trip(
+            {"date": payment.date, "time": payment.time, "amount": payment.amount},
+            trip_dicts,
+        )
+
+        if result:
+            payment.trip_id = result["trip_id"]
+            payment.tip_amount = result["tip_amount"]
+            matched += 1
+        else:
+            unmatched_ids.append(pid)
+
+    # Create PendingValidation for unmatched payments
+    for pid in unmatched_ids:
+        payment = session.get(VisaPayment, pid)
+        if not payment:
+            continue
+        pv = PendingValidation(
+            validation_type="visa_no_match",
+            status="pending",
+            details={
+                "visa_payment_id": pid,
+                "date": payment.date.isoformat(),
+                "time": payment.time.isoformat(),
+                "amount": float(payment.amount),
+                "card_last4": payment.card_last4,
+                "brand": payment.brand,
+            },
+        )
+        session.add(pv)
+
+    session.commit()
+
+    msg = f"Pagos VISA importados: {created}. Duplicados: {skipped}. Enlazados con viaje: {matched}."
+    if unmatched_ids:
+        msg += f" Sin enlace (pendientes de validacion): {len(unmatched_ids)}."
     return await _render_result(request, session, user, success=msg)
 
 

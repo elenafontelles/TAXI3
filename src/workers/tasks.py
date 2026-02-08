@@ -2,7 +2,7 @@
 """Arq job tasks for scraper synchronization."""
 import asyncio
 import logging
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from sqlalchemy.orm import sessionmaker
 
@@ -180,3 +180,53 @@ async def sync_prima(ctx, log_id: int, start_date: str, end_date: str):
         raise
     finally:
         session.close()
+
+
+async def scheduled_sync_freenow(ctx):
+    """Cron job: sync FreeNow for yesterday's data."""
+    yesterday = date.today() - timedelta(days=1)
+    logger.info(f"Scheduled FreeNow sync for {yesterday}")
+
+    engine = get_engine()
+    SessionLocal = sessionmaker(bind=engine)
+    session = SessionLocal()
+
+    try:
+        log = SyncLog(
+            source="freenow",
+            sync_type="scheduled",
+            status="running",
+            started_at=datetime.now(timezone.utc),
+        )
+        session.add(log)
+        session.commit()
+        log_id = log.id
+    finally:
+        session.close()
+
+    return await sync_freenow(ctx, log_id, yesterday.isoformat(), yesterday.isoformat())
+
+
+async def scheduled_sync_prima(ctx):
+    """Cron job: sync Prima for yesterday's data."""
+    yesterday = date.today() - timedelta(days=1)
+    logger.info(f"Scheduled Prima sync for {yesterday}")
+
+    engine = get_engine()
+    SessionLocal = sessionmaker(bind=engine)
+    session = SessionLocal()
+
+    try:
+        log = SyncLog(
+            source="prima",
+            sync_type="scheduled",
+            status="running",
+            started_at=datetime.now(timezone.utc),
+        )
+        session.add(log)
+        session.commit()
+        log_id = log.id
+    finally:
+        session.close()
+
+    return await sync_prima(ctx, log_id, yesterday.isoformat(), yesterday.isoformat())

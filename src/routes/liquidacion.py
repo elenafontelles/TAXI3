@@ -14,6 +14,7 @@ from src.models.pending_validation import PendingValidation
 from src.models.vehicle import Vehicle
 from src.services.settlement_calculator import calculate_daily_settlement
 from src.services.excel_exporter import export_settlement_to_excel
+from src.services.pdf_exporter import export_settlement_to_pdf
 from src.template_config import templates
 
 router = APIRouter()
@@ -291,5 +292,119 @@ async def export_liquidacion(
     return StreamingResponse(
         buffer,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
+
+@router.post("/liquidacion/export-pdf", response_class=StreamingResponse)
+async def export_liquidacion_pdf(
+    request: Request,
+    driver_id: str = Form(...),
+    start_date: str = Form(...),
+    end_date: str = Form(...),
+    user: dict = Depends(require_admin),
+    session: Session = Depends(get_session),
+):
+    """Export settlement to PDF."""
+    from src.config import settings
+
+    root_path = settings.root_path
+
+    driver = session.get(Driver, driver_id)
+    if not driver:
+        return RedirectResponse(url=f"{root_path}/liquidacion", status_code=303)
+
+    sd = date.fromisoformat(start_date)
+    ed = date.fromisoformat(end_date)
+
+    vehicle = session.query(Vehicle).filter_by(
+        owner_id=driver.owner_id, is_active=True
+    ).first()
+
+    results = []
+    current = sd
+    while current <= ed:
+        day_trips = session.query(Trip).filter(
+            Trip.driver_id == driver_id,
+            func.date(Trip.started_at) == current,
+        ).all()
+
+        prima_amount = sum(
+            Decimal(str(t.gross_amount or 0))
+            for t in day_trips if t.source == "prima"
+        )
+        freenow_bruto = sum(
+            Decimal(str(t.gross_amount or 0))
+            for t in day_trips if t.source == "freenow"
+        )
+        uber_net = sum(
+            Decimal(str(t.gross_amount or 0))
+            for t in day_trips if t.source == "uber"
+        )
+
+        visa_total = Decimal("0")
+        if vehicle:
+            visa_result = session.query(func.sum(VisaPayment.amount)).filter(
+                VisaPayment.date == current,
+                VisaPayment.vehicle_id == vehicle.id,
+            ).scalar()
+            if visa_result:
+                visa_total = Decimal(str(visa_result))
+
+        freenow_app = sum(
+            Decimal(str(t.gross_amount or 0))
+            for t in day_trips if t.source == "freenow" and t.payment_method == "app"
+        )
+        uber_app = sum(
+            Decimal(str(t.gross_amount or 0))
+            for t in day_trips if t.source == "uber" and t.payment_method == "app"
+        )
+
+        freenow_commission = freenow_bruto * Decimal("0.125")
+        uber_commission = uber_net * Decimal("0.25")
+
+        settlement = calculate_daily_settlement(
+            prima_amount=prima_amount,
+            freenow_bruto=freenow_bruto,
+            uber_net=uber_net,
+            visa_total=visa_total,
+            freenow_app_paid=freenow_app,
+            uber_app_paid=uber_app,
+            freenow_commission=freenow_commission,
+            uber_commission=uber_commission,
+            driver_config={
+                "commission_base_pct": driver.commission_base_pct,
+                "commission_bonus_pct": driver.commission_bonus_pct,
+                "commission_threshold": driver.commission_threshold,
+                "freenow_commission_driver_pct": driver.freenow_commission_driver_pct,
+                "uber_commission_driver_pct": driver.uber_commission_driver_pct,
+            },
+        )
+        settlement["date"] = current
+        results.append(settlement)
+        current += timedelta(days=1)
+
+    totals = {}
+    if results:
+        for key in [
+            "prima_amount", "freenow_net", "uber_net", "rec_total",
+            "visa_total", "freenow_app_paid", "uber_app_paid",
+            "vat", "driver_share", "cash", "debt",
+        ]:
+            totals[key] = sum(r.get(key, Decimal("0")) for r in results)
+
+    buffer = export_settlement_to_pdf(
+        driver_name=driver.name,
+        start_date=start_date,
+        end_date=end_date,
+        results=results,
+        totals=totals,
+    )
+
+    filename = f"liquidacion_{driver.name.replace(' ', '_')}_{start_date}_{end_date}.pdf"
+
+    return StreamingResponse(
+        buffer,
+        media_type="application/pdf",
         headers={"Content-Disposition": f"attachment; filename={filename}"}
     )

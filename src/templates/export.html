@@ -28,6 +28,9 @@
                     <label for="driver_filter" class="form-label">Conductor</label>
                     <select class="form-select" id="driver_filter" name="driver_id">
                         <option value="">Todos los conductores</option>
+                        {% for d in drivers %}
+                        <option value="{{ d.id }}">{{ d.name }}</option>
+                        {% endfor %}
                     </select>
                 </div>
                 <div class="col-md-4">
@@ -35,7 +38,6 @@
                     <select class="form-select" id="report_type" name="report_type">
                         <option value="trips">Viajes detallados</option>
                         <option value="summary">Resumen diario</option>
-                        <option value="tax">Informe fiscal</option>
                     </select>
                 </div>
             </div>
