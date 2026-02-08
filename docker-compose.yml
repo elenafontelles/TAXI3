@@ -73,6 +73,8 @@ services:
       - ./scrapers:/app/scrapers:ro
       - ./scripts:/app/scripts:ro
       - ./imports:/app/imports
+    healthcheck:
+      disable: true
 
 volumes:
   postgres_data:

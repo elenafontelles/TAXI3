@@ -63,6 +63,8 @@ services:
         condition: service_healthy
     volumes:
       - taxi_imports:/app/imports
+    healthcheck:
+      disable: true
 
 volumes:
   taxi_pg_data:

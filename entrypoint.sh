@@ -1,6 +1,12 @@
 #!/bin/bash
 set -e
 
+# If a custom command is passed (e.g. "arq ..."), run it directly
+if [ $# -gt 0 ]; then
+    echo "==> Running custom command: $@"
+    exec "$@"
+fi
+
 echo "==> Running database migrations..."
 alembic upgrade head
 
