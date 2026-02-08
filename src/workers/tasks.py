@@ -1,5 +1,6 @@
 # src/workers/tasks.py
 """Arq job tasks for scraper synchronization."""
+import asyncio
 import logging
 from datetime import date, datetime, timezone
 
@@ -37,10 +38,10 @@ async def sync_freenow(ctx, log_id: int, start_date: str, end_date: str):
         sd = date.fromisoformat(start_date)
         ed = date.fromisoformat(end_date)
 
-        # Import scraper and run
+        # Run scraper in a thread (Playwright sync API can't run inside asyncio loop)
         from scrapers.freenow_scraper import FreeNowScraper
         scraper = FreeNowScraper(start_date=sd, end_date=ed)
-        csv_path = scraper.run()
+        csv_path = await asyncio.to_thread(scraper.run)
 
         if not csv_path:
             log.status = "error"
@@ -115,10 +116,10 @@ async def sync_prima(ctx, log_id: int, start_date: str, end_date: str):
         sd = date.fromisoformat(start_date)
         ed = date.fromisoformat(end_date)
 
-        # Import scraper and run
+        # Run scraper in a thread (Playwright sync API can't run inside asyncio loop)
         from scrapers.prima_scraper import PrimaScraper
         scraper = PrimaScraper(start_date=sd, end_date=ed)
-        csv_path = scraper.run()
+        csv_path = await asyncio.to_thread(scraper.run)
 
         if not csv_path:
             log.status = "error"
