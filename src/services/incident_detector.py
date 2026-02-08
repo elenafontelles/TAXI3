@@ -87,4 +87,14 @@ def create_incident_validations(session, trip_ids: list[str]) -> int:
         session.commit()
         logger.info(f"Created {created} incident validations from {len(trip_ids)} trips")
 
+        # Async email notification (fire and forget)
+        try:
+            import asyncio
+            from src.services.email_service import notify_pending_validations
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                loop.create_task(notify_pending_validations(created))
+        except Exception:
+            pass  # Don't fail import because of email
+
     return created

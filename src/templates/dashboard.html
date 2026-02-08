@@ -36,6 +36,71 @@
     </div>
 </div>
 
+<!-- Platform Stats -->
+{% if analytics.platform_stats %}
+<div class="row mb-4">
+    {% for source, stats in analytics.platform_stats.items() %}
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <span class="badge bg-{{ 'primary' if source == 'uber' else 'success' if source == 'freenow' else 'warning' }}">{{ source|upper }}</span>
+                <span class="text-muted small">(este mes)</span>
+            </div>
+            <div class="card-body p-2">
+                <table class="table table-sm mb-0" style="font-size:0.85rem">
+                    <tr><td class="text-muted">Viajes</td><td class="text-end fw-bold">{{ stats.trips }}</td></tr>
+                    <tr><td class="text-muted">Bruto</td><td class="text-end">{{ stats.gross }} EUR</td></tr>
+                    <tr><td class="text-muted">EUR/km</td><td class="text-end fw-bold text-primary">{{ stats.eur_per_km }}</td></tr>
+                    <tr><td class="text-muted">EUR/hora</td><td class="text-end fw-bold text-success">{{ stats.eur_per_hour }}</td></tr>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<!-- Hourly Distribution -->
+{% if analytics.time_slots %}
+<div class="card mb-4">
+    <div class="card-header">Ingresos por Franja Horaria (Este Mes)</div>
+    <div class="card-body">
+        <canvas id="hourlyChart"></canvas>
+    </div>
+</div>
+{% endif %}
+
+<!-- Driver Comparison (admin only) -->
+{% if analytics.driver_comparison %}
+<div class="card mb-4">
+    <div class="card-header">Comparativa Conductores (Este Mes)</div>
+    <div class="card-body p-0">
+        <table class="table table-striped table-hover mb-0" style="font-size:0.9rem">
+            <thead>
+                <tr>
+                    <th>Conductor</th>
+                    <th class="text-end">Viajes</th>
+                    <th class="text-end">Bruto</th>
+                    <th class="text-end">Km</th>
+                    <th class="text-end">EUR/km</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for d in analytics.driver_comparison %}
+                <tr>
+                    <td>{{ d.driver_name }}</td>
+                    <td class="text-end">{{ d.trips }}</td>
+                    <td class="text-end">{{ d.gross }} EUR</td>
+                    <td class="text-end">{{ d.km }}</td>
+                    <td class="text-end fw-bold">{{ d.eur_per_km }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
 {% if summary.recent_trips %}
 <div class="card">
     <div class="card-header">Ultimos Viajes</div>
@@ -89,5 +154,41 @@ new Chart(ctx, {
         }
     }
 });
+
+{% if analytics.time_slots %}
+const hCtx = document.getElementById('hourlyChart').getContext('2d');
+const slots = {{ analytics.time_slots | tojson }};
+new Chart(hCtx, {
+    type: 'bar',
+    data: {
+        labels: slots.map(s => s.label),
+        datasets: [
+            {
+                label: 'Ingresos (EUR)',
+                data: slots.map(s => s.gross),
+                backgroundColor: 'rgba(75, 192, 192, 0.5)',
+                borderColor: 'rgba(75, 192, 192, 1)',
+                borderWidth: 1,
+                yAxisID: 'y',
+            },
+            {
+                label: 'Viajes',
+                data: slots.map(s => s.trips),
+                type: 'line',
+                borderColor: 'rgba(255, 99, 132, 1)',
+                backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                yAxisID: 'y1',
+                tension: 0.3,
+            },
+        ]
+    },
+    options: {
+        scales: {
+            y: { beginAtZero: true, position: 'left', title: { display: true, text: 'EUR' }},
+            y1: { beginAtZero: true, position: 'right', grid: { drawOnChartArea: false }, title: { display: true, text: 'Viajes' }},
+        }
+    }
+});
+{% endif %}
 </script>
 {% endblock %}

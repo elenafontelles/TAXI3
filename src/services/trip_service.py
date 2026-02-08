@@ -1,8 +1,9 @@
 # src/services/trip_service.py
 from datetime import datetime, date, timedelta, timezone
-from sqlalchemy import func, case
+from sqlalchemy import func, case, extract, cast, Date
 from sqlalchemy.orm import Session
 from src.models.trip import Trip
+from src.models.driver import Driver
 
 
 def get_earnings_summary(session: Session, driver_id: str | None = None) -> dict:
@@ -56,6 +57,102 @@ def get_earnings_summary(session: Session, driver_id: str | None = None) -> dict
         "this_month": float(totals.month_total),
         "recent_trips": recent,
         "daily_chart": {"labels": labels, "data": data},
+    }
+
+
+def get_advanced_analytics(session: Session, driver_id: str | None = None) -> dict:
+    """Get advanced analytics: EUR/km per platform, EUR/hour per time slot, driver comparison."""
+    start_of_month = date.today().replace(day=1)
+
+    base_filter = [cast(Trip.started_at, Date) >= start_of_month]
+    if driver_id:
+        base_filter.append(Trip.driver_id == driver_id)
+
+    # EUR/km per platform (this month)
+    platform_q = (
+        session.query(
+            Trip.source,
+            func.count(Trip.id).label("trips"),
+            func.coalesce(func.sum(Trip.gross_amount), 0).label("gross"),
+            func.coalesce(func.sum(Trip.distance_km), 0).label("km"),
+            func.coalesce(func.sum(Trip.duration_minutes), 0).label("minutes"),
+        )
+        .filter(*base_filter)
+        .group_by(Trip.source)
+    )
+
+    platform_stats = {}
+    for row in platform_q.all():
+        km = float(row.km) if row.km else 0
+        mins = float(row.minutes) if row.minutes else 0
+        gross = float(row.gross)
+        platform_stats[row.source] = {
+            "trips": row.trips,
+            "gross": round(gross, 2),
+            "km": round(km, 1),
+            "hours": round(mins / 60, 1),
+            "eur_per_km": round(gross / km, 2) if km > 0 else 0,
+            "eur_per_hour": round(gross / (mins / 60), 2) if mins > 0 else 0,
+        }
+
+    # EUR/hour per time slot (2-hour blocks)
+    hourly_q = (
+        session.query(
+            extract("hour", Trip.started_at).label("hour"),
+            func.count(Trip.id).label("trips"),
+            func.coalesce(func.sum(Trip.gross_amount), 0).label("gross"),
+        )
+        .filter(*base_filter)
+        .group_by(extract("hour", Trip.started_at))
+        .order_by(extract("hour", Trip.started_at))
+    )
+
+    hourly_raw = {int(r.hour): {"trips": r.trips, "gross": float(r.gross)} for r in hourly_q.all()}
+
+    # Aggregate into 2-hour blocks
+    time_slots = []
+    for start_h in range(0, 24, 2):
+        end_h = start_h + 2
+        trips = sum(hourly_raw.get(h, {}).get("trips", 0) for h in range(start_h, end_h))
+        gross = sum(hourly_raw.get(h, {}).get("gross", 0) for h in range(start_h, end_h))
+        label = f"{start_h:02d}-{end_h:02d}"
+        time_slots.append({
+            "label": label,
+            "trips": trips,
+            "gross": round(gross, 2),
+            "avg_per_trip": round(gross / trips, 2) if trips > 0 else 0,
+        })
+
+    # Driver comparison (admin only, this month)
+    driver_comparison = []
+    if not driver_id:
+        driver_q = (
+            session.query(
+                Trip.driver_id,
+                func.count(Trip.id).label("trips"),
+                func.coalesce(func.sum(Trip.gross_amount), 0).label("gross"),
+                func.coalesce(func.sum(Trip.distance_km), 0).label("km"),
+            )
+            .filter(cast(Trip.started_at, Date) >= start_of_month)
+            .group_by(Trip.driver_id)
+        )
+        drivers_map = {d.id: d.name for d in session.query(Driver).all()}
+        for row in driver_q.all():
+            km = float(row.km) if row.km else 0
+            driver_comparison.append({
+                "driver_id": row.driver_id,
+                "driver_name": drivers_map.get(row.driver_id, "?"),
+                "trips": row.trips,
+                "gross": round(float(row.gross), 2),
+                "km": round(km, 1),
+                "eur_per_km": round(float(row.gross) / km, 2) if km > 0 else 0,
+            })
+        driver_comparison.sort(key=lambda x: x["gross"], reverse=True)
+
+    return {
+        "platform_stats": platform_stats,
+        "time_slots": time_slots,
+        "driver_comparison": driver_comparison,
     }
 
 

@@ -15,6 +15,7 @@ from scripts.parsers.freenow_parser import parse_freenow_csv
 from scripts.parsers.prima_parser import parse_prima_csv
 from src.models.trip import Trip
 from src.models.visa_payment import VisaPayment
+from src.models.fuel_expense import FuelExpense
 from src.models.pending_validation import PendingValidation
 from src.template_config import templates
 
@@ -133,6 +134,10 @@ async def process_upload(
     if platform == "lacaixa":
         return await _process_lacaixa(request, user, vehicle_id, csv_file, session)
 
+    # Fuel upload (Petroprix CSV / Repsol PDF)
+    if platform in ("petroprix", "repsol"):
+        return await _process_fuel(request, user, platform, driver_id, vehicle_id, csv_file, session)
+
     parser = PARSERS.get(platform)
     if not parser:
         return await _render_result(request, session, user, error="Plataforma no reconocida")
@@ -142,6 +147,13 @@ async def process_upload(
         content = await csv_file.read()
         tmp.write(content)
         tmp_path = tmp.name
+
+    # Validate CSV schema before parsing
+    from src.services.csv_validator import validate_csv_schema
+    is_valid, validation_error = validate_csv_schema(tmp_path, platform)
+    if not is_valid:
+        os.unlink(tmp_path)
+        return await _render_result(request, session, user, error=validation_error)
 
     try:
         records = parser(tmp_path)
@@ -186,6 +198,102 @@ async def process_upload(
         msg += f" Sin asignar (conductor/vehiculo no encontrado): {unmatched}."
     if incidents:
         msg += f" Incidencias detectadas: {incidents}."
+    return await _render_result(request, session, user, success=msg)
+
+
+async def _process_fuel(request, user, platform, driver_id, vehicle_id, csv_file, session):
+    """Handle Petroprix CSV or Repsol PDF fuel upload with auto vehicle/driver matching."""
+    if platform == "repsol":
+        suffix = ".pdf"
+    else:
+        suffix = ".csv"
+
+    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+        content = await csv_file.read()
+        tmp.write(content)
+        tmp_path = tmp.name
+
+    # Validate CSV schema for Petroprix
+    if platform == "petroprix":
+        from src.services.csv_validator import validate_csv_schema
+        is_valid, validation_error = validate_csv_schema(tmp_path, platform)
+        if not is_valid:
+            os.unlink(tmp_path)
+            return await _render_result(request, session, user, error=validation_error)
+
+    try:
+        if platform == "petroprix":
+            from scripts.parsers.petroprix_parser import parse_petroprix_csv
+            records = parse_petroprix_csv(tmp_path)
+        else:
+            from scripts.parsers.repsol_parser import parse_repsol_pdf
+            records = parse_repsol_pdf(tmp_path)
+    except Exception as e:
+        os.unlink(tmp_path)
+        return await _render_result(request, session, user, error=f"Error al parsear {platform}: {e}")
+
+    os.unlink(tmp_path)
+
+    if not records:
+        return await _render_result(request, session, user, error="No se encontraron registros en el archivo")
+
+    lookups = _build_lookups(session)
+    source_file = csv_file.filename or f"{platform}_upload"
+    created = 0
+    skipped = 0
+    unmatched = 0
+
+    for rec in records:
+        # Resolve vehicle from _plate
+        rec_vehicle = vehicle_id
+        if "_plate" in rec:
+            plate_key = _normalize_plate(rec["_plate"])
+            matched_vehicle = lookups["plate_to_vehicle"].get(plate_key)
+            if matched_vehicle:
+                rec_vehicle = matched_vehicle
+
+        # Resolve driver from _driver name or fallback
+        rec_driver = driver_id or None
+        if "_driver" in rec and rec["_driver"]:
+            name_key = rec["_driver"].strip().lower()
+            for db_name, db_id in lookups["driver_names"]:
+                if name_key == db_name or db_name.startswith(name_key) or name_key.startswith(db_name):
+                    rec_driver = db_id
+                    break
+
+        if not rec_vehicle:
+            unmatched += 1
+            continue
+
+        # Deduplicate by date + vehicle + amount + provider
+        existing = session.query(FuelExpense).filter_by(
+            date=rec["date"],
+            vehicle_id=rec_vehicle,
+            amount=rec["amount"],
+            provider=rec["provider"],
+        ).first()
+        if existing:
+            skipped += 1
+            continue
+
+        expense = FuelExpense(
+            date=rec["date"],
+            vehicle_id=rec_vehicle,
+            driver_id=rec_driver,
+            liters=rec["liters"],
+            amount=rec["amount"],
+            provider=rec["provider"],
+            source_file=source_file,
+            payment_method=rec.get("payment_method", "tarjeta"),
+        )
+        session.add(expense)
+        created += 1
+
+    session.commit()
+
+    msg = f"Gastos combustible importados: {created}. Duplicados: {skipped}."
+    if unmatched:
+        msg += f" Sin vehiculo asignado: {unmatched}."
     return await _render_result(request, session, user, success=msg)
 
 
@@ -309,6 +417,11 @@ async def _process_lacaixa(request, user, vehicle_id, csv_file, session):
         session.add(pv)
 
     session.commit()
+
+    # Notify about unmatched VISA payments
+    if unmatched_ids:
+        from src.services.email_service import notify_pending_validations
+        await notify_pending_validations(len(unmatched_ids))
 
     msg = f"Pagos VISA importados: {created}. Duplicados: {skipped}. Enlazados con viaje: {matched}."
     if unmatched_ids:
