@@ -66,12 +66,12 @@ jobs:
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
-          password: ${{ secrets.VPS_PASSWORD }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
-            echo '${{ secrets.GITHUB_TOKEN }}' | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-            cd ${{ secrets.DEPLOY_PATH || '/opt/taxi-api' }}
-            git pull origin main
-            docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
-            docker stop taxi-worker taxi-api || true
-            docker rm taxi-worker taxi-api || true
-            docker-compose -f docker-compose.prod.yml up -d
+            echo '${{ secrets.GITHUB_TOKEN }}' | sudo docker login ghcr.io -u ${{ github.actor }} --password-stdin
+            cd ${{ secrets.DEPLOY_PATH }}/repo
+            sudo git pull origin main
+            sudo docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+            sudo docker stop taxi-worker taxi-api || true
+            sudo docker rm taxi-worker taxi-api || true
+            sudo docker-compose -f docker-compose.prod.yml up -d
