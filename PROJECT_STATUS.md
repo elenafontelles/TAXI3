@@ -35,19 +35,16 @@
 
 ---
 
-## 2. BUG ACTIVO: 502 en produccion
+## 2. Produccion - FUNCIONANDO
 
-### Sintoma
-`https://keonycs.com/tools3/taxi/` devuelve HTTP 502 Bad Gateway.
+### URL publica: `https://keonycs.com/tools3/taxi/` - HTTP 200 OK
 
-### Causa raiz
-Caddy (`dashboard-caddy`) y `taxi-api` estan en **redes Docker diferentes**:
-- Caddy esta en: `dashboard_backend`, `dashboard_frontend`
-- taxi-api esta en: `repo_default`
+### Fix aplicado (2026-02-08)
+- `taxi-api` conectado a red `dashboard_backend` via docker-compose.prod.yml
+- Caddy hace `uri strip_prefix /tools3/taxi` + FastAPI `ROOT_PATH=/tools3/taxi` (funciona correctamente)
+- CI/CD arreglado: usa `docker-compose` v1 + patron stop/rm/up
 
-Caddy no puede resolver `taxi-api:8000` porque no comparten red.
-
-### Configuracion actual de Caddy (en `/etc/caddy/Caddyfile` dentro del container `dashboard-caddy`):
+### Configuracion Caddy (en `/etc/caddy/Caddyfile` dentro de `dashboard-caddy`):
 ```
 handle /tools3/taxi {
     redir /tools3/taxi/ permanent
@@ -56,24 +53,6 @@ handle /tools3/taxi/* {
     uri strip_prefix /tools3/taxi
     reverse_proxy taxi-api:8000
 }
-```
-
-### Nota sobre ROOT_PATH
-- Caddy hace `uri strip_prefix /tools3/taxi` (quita el prefijo antes de enviar a FastAPI)
-- FastAPI tiene `ROOT_PATH=/tools3/taxi` (genera URLs con el prefijo)
-- El design doc original decia usar `handle` sin strip, pero en la practica se implemento con strip
-- Esto puede causar conflictos: FastAPI genera links como `/tools3/taxi/login` pero recibe requests como `/login`
-
-### Solucion necesaria
-1. Conectar `taxi-api` a la red de Caddy: `docker network connect dashboard_backend taxi-api`
-2. O bien: anadir `external: true` + `networks: dashboard_backend` en docker-compose.prod.yml
-3. Verificar que la combinacion strip_prefix + ROOT_PATH funcione correctamente
-4. Si no funciona: quitar strip_prefix en Caddy Y quitar ROOT_PATH en docker-compose, o viceversa
-
-### Verificacion local (el API responde internamente)
-```bash
-ssh ubuntu@51.77.144.212 "curl -s http://localhost:8010/health"
-# {"status":"healthy","version":"1.0.0","app":"TAXI API","root_path":"/tools3/taxi"}
 ```
 
 ---
@@ -160,8 +139,8 @@ Owner, Driver (con comisiones), Vehicle, Trip, Shift, SyncLog, FreeNowImport, Da
 | Admin | /admin | Completa (drivers + vehicles + comisiones) |
 | Validacion | /validacion | Completa (3 tabs: incidencias, VISA, combustible) |
 | Liquidacion | /liquidacion | Completa (calculo + tabla + export Excel) |
-| Summary | /summary | STUB - template vacio |
-| Export | /export | STUB - template vacio |
+| Summary | /summary | Completa (agregaciones diarias + filtros + totales) |
+| Export | /export | Completa (CSV + Excel, viajes detallados + resumen) |
 
 ### Discovery scrapers (herramientas de desarrollo)
 - scrapers/freenow_discover.py - Explorar portal FreeNow
@@ -174,21 +153,17 @@ Owner, Driver (con comisiones), Vehicle, Trip, Shift, SyncLog, FreeNowImport, Da
 
 ## 6. Lo que FALTA por hacer (priorizado)
 
-### CRITICO - Arreglar produccion
-| # | Tarea | Detalle |
-|---|-------|---------|
-| 1 | **Arreglar 502 en produccion** | Conectar taxi-api a la red Docker de Caddy. Ver seccion 2. |
-| 2 | **Verificar/arreglar CI/CD** | docker compose v1 vs v2 en VPS. El pipeline puede no estar deployando. |
-
-### ALTO - Funcionalidad core incompleta
-| # | Tarea | Esfuerzo | Detalle |
-|---|-------|----------|---------|
-| 3 | **Auto-crear incidencias al importar** | 2h | incident_detector existe pero no se llama durante upload/sync. La cola de validacion esta siempre vacia. |
-| 4 | **Auto-matching VISA al subir La Caixa** | 2h | visa_matcher existe pero no se integra en el flujo de upload. |
-| 5 | **Sync automatico programado** | 4h | Arq cron jobs para sync diario a las 02:00/02:05. Ahora solo manual. |
-| 6 | **Implementar /summary con datos reales** | 4h | Pagina stub, necesita summary_service con agregaciones mensuales/por conductor. |
-| 7 | **Implementar /export con descargas** | 3h | Pagina stub, necesita: Excel mensual, CSV libro servicios. |
-| 8 | **PDF export para liquidaciones** | 3h | Solo hay Excel export, falta PDF. |
+### COMPLETADO (2026-02-08)
+| # | Tarea | Estado |
+|---|-------|--------|
+| 1 | ~~Arreglar 502 en produccion~~ | HECHO - taxi-api en red dashboard_backend |
+| 2 | ~~Verificar/arreglar CI/CD~~ | HECHO - docker-compose v1 + stop/rm/up |
+| 3 | ~~Auto-crear incidencias al importar~~ | HECHO - incident_detector integrado en upload/sync |
+| 4 | ~~Auto-matching VISA al subir La Caixa~~ | HECHO - La Caixa XLSX upload + visa_matcher |
+| 5 | ~~Sync automatico programado~~ | HECHO - Arq cron jobs 02:00/02:05 UTC |
+| 6 | ~~Implementar /summary con datos reales~~ | HECHO - agregaciones diarias con filtros |
+| 7 | ~~Implementar /export con descargas~~ | HECHO - CSV + Excel (viajes y resumen) |
+| 8 | ~~PDF export para liquidaciones~~ | HECHO - fpdf2, boton en /liquidacion |
 
 ### MEDIO - Mejoras importantes
 | # | Tarea | Esfuerzo | Detalle |
@@ -213,7 +188,7 @@ Owner, Driver (con comisiones), Vehicle, Trip, Shift, SyncLog, FreeNowImport, Da
 
 | Bug | Estado | Workaround |
 |-----|--------|------------|
-| 502 en produccion (Caddy no alcanza taxi-api) | ABIERTO | API funciona en localhost:8010, falta conectar redes Docker |
+| ~~502 en produccion~~ | ARREGLADO | taxi-api conectado a dashboard_backend |
 | docker-compose v1 `ContainerConfig` KeyError | Conocido | Usar stop/rm/up en vez de --force-recreate |
 | Playwright sync API en asyncio loop | ARREGLADO | `asyncio.to_thread(scraper.run)` en tasks.py |
 | entrypoint.sh ignoraba CMD override | ARREGLADO | Ahora comprueba `$#` args antes de ejecutar uvicorn |
@@ -232,7 +207,7 @@ TAXI_API/
     template_config.py               # Jinja2 config
     models/                          # SQLAlchemy models (13 archivos)
     routes/                          # Web routes (auth, admin, dashboard, trips, sync, upload, validation, liquidacion, summary, export)
-    services/                        # Business logic (8 archivos)
+    services/                        # Business logic (9 archivos, incluye pdf_exporter)
     workers/
       settings.py                    # Arq WorkerSettings
       tasks.py                       # sync_freenow, sync_prima (async + to_thread)
@@ -278,6 +253,8 @@ ROOT_PATH=/tools3/taxi
 ## 10. Historial reciente de commits
 
 ```
+72ef148 feat: implement pending features (tasks #3-#8 from PROJECT_STATUS)
+b5f2104 fix: connect taxi-api to Caddy network + fix CI/CD for docker-compose v1
 20c20ec chore: gitignore data files (CSVs, Excel, PDFs, screenshots, imports)
 eaa1c8c fix: run Playwright scrapers in thread within async Arq tasks
 f0eb7c9 fix: entrypoint.sh now respects custom commands for worker container
