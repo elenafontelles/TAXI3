@@ -72,3 +72,12 @@ temp/
 # OS
 .DS_Store
 Thumbs.db
+
+# Data files (imports, exports, screenshots)
+imports/
+screenshots/
+*.csv
+*.xlsx
+*.pdf
+*.png
+!requirements*.txt
