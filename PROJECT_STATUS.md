@@ -129,6 +129,9 @@ Owner, Driver (con comisiones), Vehicle, Trip, Shift, SyncLog, FreeNowImport, Da
 | Trip service | src/services/trip_service.py | Queries para dashboard + analytics avanzado |
 | Email service | src/services/email_service.py | Notificaciones email via aiosmtplib |
 | CSV validator | src/services/csv_validator.py | Validacion schema CSV antes de parsear |
+| GDPR service | src/services/gdpr_service.py | Anonimiza GPS >90 dias, purga tokens expirados |
+| Token encryption | src/services/token_encryption.py | Fernet encrypt/decrypt para OAuth tokens |
+| Gap detector | src/services/gap_detector.py | Detecta plataformas sin sync >3 dias |
 
 ### Paginas web (UI)
 | Pagina | Ruta | Estado |
@@ -176,13 +179,13 @@ Owner, Driver (con comisiones), Vehicle, Trip, Shift, SyncLog, FreeNowImport, Da
 | 12 | ~~Auto-asignacion combustible~~ | HECHO - Petroprix CSV + Repsol PDF upload con auto-match placa |
 | 13 | ~~Validacion schema CSV~~ | HECHO - csv_validator.py verifica columnas antes de parsear |
 
-### BAJO - Nice to have
-| # | Tarea | Esfuerzo |
-|---|-------|----------|
-| 14 | GDPR (anonimizacion GPS 90 dias, purge tokens) | 5h |
-| 15 | OAuth token encryption (Fernet) | 2h |
-| 16 | Gap detection (alerta si >3 dias sin sync) | 2h |
-| 17 | Rate limiting en API | 2h |
+### COMPLETADO (2026-02-08, low priority)
+| # | Tarea | Estado |
+|---|-------|--------|
+| 14 | ~~GDPR (anonimizacion GPS 90 dias, purge tokens)~~ | HECHO - gdpr_service.py + cron 03:00 UTC |
+| 15 | ~~OAuth token encryption (Fernet)~~ | HECHO - token_encryption.py con derive de SECRET_KEY |
+| 16 | ~~Gap detection (alerta si >3 dias sin sync)~~ | HECHO - gap_detector.py + email alert + cron 08:00 UTC |
+| 17 | ~~Rate limiting en API~~ | HECHO - slowapi 60/min default, 5/min login, 2/min sync |
 
 ---
 
@@ -209,7 +212,7 @@ TAXI_API/
     template_config.py               # Jinja2 config
     models/                          # SQLAlchemy models (13 archivos)
     routes/                          # Web routes (auth, admin, dashboard, trips, sync, upload, validation, liquidacion, summary, export, api_v1)
-    services/                        # Business logic (11 archivos, incluye pdf_exporter, email, csv_validator)
+    services/                        # Business logic (14 archivos, incluye pdf_exporter, email, csv_validator, gdpr, encryption, gap_detector)
     workers/
       settings.py                    # Arq WorkerSettings
       tasks.py                       # sync_freenow, sync_prima (async + to_thread)
@@ -255,6 +258,7 @@ ROOT_PATH=/tools3/taxi
 ## 10. Historial reciente de commits
 
 ```
+8ed6b99 feat: implement low priority tasks (#14-#17)
 c0d20e5 feat: implement medium priority tasks (#9-#13)
 84c8bb6 docs: update PROJECT_STATUS.md - mark tasks #1-#8 as completed
 72ef148 feat: implement pending features (tasks #3-#8 from PROJECT_STATUS)
