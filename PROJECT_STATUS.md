@@ -126,7 +126,9 @@ Owner, Driver (con comisiones), Vehicle, Trip, Shift, SyncLog, FreeNowImport, Da
 | Excel exporter | src/services/excel_exporter.py | Export liquidacion a Excel |
 | Job service | src/services/job_service.py | Encola jobs en Redis/Arq |
 | Auth service | src/services/auth_service.py | JWT, bcrypt, login |
-| Trip service | src/services/trip_service.py | Queries para dashboard |
+| Trip service | src/services/trip_service.py | Queries para dashboard + analytics avanzado |
+| Email service | src/services/email_service.py | Notificaciones email via aiosmtplib |
+| CSV validator | src/services/csv_validator.py | Validacion schema CSV antes de parsear |
 
 ### Paginas web (UI)
 | Pagina | Ruta | Estado |
@@ -165,14 +167,14 @@ Owner, Driver (con comisiones), Vehicle, Trip, Shift, SyncLog, FreeNowImport, Da
 | 7 | ~~Implementar /export con descargas~~ | HECHO - CSV + Excel (viajes y resumen) |
 | 8 | ~~PDF export para liquidaciones~~ | HECHO - fpdf2, boton en /liquidacion |
 
-### MEDIO - Mejoras importantes
-| # | Tarea | Esfuerzo | Detalle |
-|---|-------|----------|---------|
-| 9 | **REST API /api/v1/** | 16h | 13 endpoints JSON (trips, drivers, summaries, sync). Ahora todo es HTML. |
-| 10 | **Dashboard analytics avanzado** | 8h | EUR/km por plataforma, EUR/hora por franja, comparativa conductores. |
-| 11 | **Email notifications** | 2h | Avisar admin cuando hay items pendientes en validacion. Email service existe. |
-| 12 | **Auto-asignacion combustible** | 3h | Matching automatico fuel -> vehiculo/conductor por matricula. |
-| 13 | **Validacion schema CSV** | 2h | Verificar columnas antes de parsear, alertar si formato cambia. |
+### COMPLETADO (2026-02-08, medium priority)
+| # | Tarea | Estado |
+|---|-------|--------|
+| 9 | ~~REST API /api/v1/~~ | HECHO - 13+ endpoints JSON con Bearer auth |
+| 10 | ~~Dashboard analytics avanzado~~ | HECHO - EUR/km, EUR/hora, comparativa conductores |
+| 11 | ~~Email notifications~~ | HECHO - aiosmtplib, notifica incidencias/VISA pendientes |
+| 12 | ~~Auto-asignacion combustible~~ | HECHO - Petroprix CSV + Repsol PDF upload con auto-match placa |
+| 13 | ~~Validacion schema CSV~~ | HECHO - csv_validator.py verifica columnas antes de parsear |
 
 ### BAJO - Nice to have
 | # | Tarea | Esfuerzo |
@@ -206,8 +208,8 @@ TAXI_API/
     database.py                      # SQLAlchemy engine + session
     template_config.py               # Jinja2 config
     models/                          # SQLAlchemy models (13 archivos)
-    routes/                          # Web routes (auth, admin, dashboard, trips, sync, upload, validation, liquidacion, summary, export)
-    services/                        # Business logic (9 archivos, incluye pdf_exporter)
+    routes/                          # Web routes (auth, admin, dashboard, trips, sync, upload, validation, liquidacion, summary, export, api_v1)
+    services/                        # Business logic (11 archivos, incluye pdf_exporter, email, csv_validator)
     workers/
       settings.py                    # Arq WorkerSettings
       tasks.py                       # sync_freenow, sync_prima (async + to_thread)
@@ -253,6 +255,8 @@ ROOT_PATH=/tools3/taxi
 ## 10. Historial reciente de commits
 
 ```
+c0d20e5 feat: implement medium priority tasks (#9-#13)
+84c8bb6 docs: update PROJECT_STATUS.md - mark tasks #1-#8 as completed
 72ef148 feat: implement pending features (tasks #3-#8 from PROJECT_STATUS)
 b5f2104 fix: connect taxi-api to Caddy network + fix CI/CD for docker-compose v1
 20c20ec chore: gitignore data files (CSVs, Excel, PDFs, screenshots, imports)
