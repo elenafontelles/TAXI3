@@ -5,6 +5,9 @@ from urllib.parse import urlparse
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
 from src.config import get_settings
 from src.routes.auth import router as auth_router, AuthRedirect
 from src.routes.dashboard import router as dashboard_router
@@ -20,7 +23,10 @@ from src.routes.api_v1 import router as api_v1_router
 
 settings = get_settings()
 
+limiter = Limiter(key_func=get_remote_address, default_limits=["60/minute"])
 app = FastAPI(title=settings.APP_NAME)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # Static files - use absolute path so it works regardless of working directory
 static_dir = os.path.join(os.path.dirname(__file__), "static")

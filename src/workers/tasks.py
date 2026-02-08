@@ -182,6 +182,68 @@ async def sync_prima(ctx, log_id: int, start_date: str, end_date: str):
         session.close()
 
 
+async def scheduled_gdpr_cleanup(ctx):
+    """Cron job: anonymize old GPS data and purge expired tokens."""
+    logger.info("Running scheduled GDPR cleanup")
+
+    engine = get_engine()
+    SessionLocal = sessionmaker(bind=engine)
+    session = SessionLocal()
+
+    try:
+        from src.services.gdpr_service import anonymize_old_gps, purge_expired_tokens
+        gps_count = anonymize_old_gps(session)
+        token_count = purge_expired_tokens(session)
+        logger.info(f"GDPR cleanup done: {gps_count} trips anonymized, {token_count} tokens purged")
+        return {"gps_anonymized": gps_count, "tokens_purged": token_count}
+    except Exception as e:
+        logger.exception(f"GDPR cleanup failed: {e}")
+        return {"error": str(e)}
+    finally:
+        session.close()
+
+
+async def scheduled_gap_check(ctx):
+    """Cron job: check for sync gaps and alert admin."""
+    logger.info("Running scheduled sync gap check")
+
+    engine = get_engine()
+    SessionLocal = sessionmaker(bind=engine)
+    session = SessionLocal()
+
+    try:
+        from src.services.gap_detector import check_sync_gaps
+        gaps = check_sync_gaps(session)
+
+        if gaps:
+            platforms = ", ".join(
+                f"{g['platform']} ({g['days_since']}d)" for g in gaps
+            )
+            logger.warning(f"Sync gaps detected: {platforms}")
+
+            from src.services.email_service import send_email
+            from src.config import get_settings
+            settings = get_settings()
+            if settings.ALERT_EMAIL_TO:
+                body = "Se han detectado brechas en la sincronizacion:\n\n"
+                for g in gaps:
+                    last = g["last_sync"] or "nunca"
+                    body += f"- {g['platform'].upper()}: ultimo sync exitoso: {last} ({g['days_since']} dias)\n"
+                body += f"\nUmbral configurado: {3} dias.\nRevisa la pagina de sync en la aplicacion."
+                await send_email(
+                    to=settings.ALERT_EMAIL_TO,
+                    subject=f"TAXI API: alerta de sync gap ({len(gaps)} plataforma(s))",
+                    body=body,
+                )
+
+        return {"gaps": gaps}
+    except Exception as e:
+        logger.exception(f"Gap check failed: {e}")
+        return {"error": str(e)}
+    finally:
+        session.close()
+
+
 async def scheduled_sync_freenow(ctx):
     """Cron job: sync FreeNow for yesterday's data."""
     yesterday = date.today() - timedelta(days=1)

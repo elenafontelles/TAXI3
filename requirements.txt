@@ -30,6 +30,9 @@ fpdf2==2.8.2
 # Browser automation
 playwright==1.49.0
 
+# Rate limiting
+slowapi==0.1.9
+
 # Job queue
 arq>=0.26
 redis>=5.0

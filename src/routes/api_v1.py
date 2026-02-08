@@ -2,7 +2,9 @@
 """REST API v1 — JSON endpoints for programmatic access."""
 from datetime import date, timedelta
 from decimal import Decimal
-from fastapi import APIRouter, Depends, HTTPException, Query, Header
+from fastapi import APIRouter, Depends, HTTPException, Query, Header, Request
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 from sqlalchemy import func, cast, Date
 from sqlalchemy.orm import Session
 from src.database import get_session
@@ -16,6 +18,7 @@ from src.models.fuel_expense import FuelExpense
 from src.services.auth_service import decode_access_token
 
 router = APIRouter(prefix="/api/v1", tags=["api"])
+limiter = Limiter(key_func=get_remote_address)
 
 
 # ── Auth dependency (Bearer token) ────────────────────────────
@@ -40,7 +43,9 @@ def require_api_admin(user: dict = Depends(require_api_auth)) -> dict:
 # ── Auth ──────────────────────────────────────────────────────
 
 @router.post("/auth/login")
+@limiter.limit("5/minute")
 async def api_login(
+    request: Request,
     email: str = Query(...),
     password: str = Query(...),
     session: Session = Depends(get_session),
@@ -273,7 +278,9 @@ async def sync_logs(
 
 
 @router.post("/sync/{source}")
+@limiter.limit("2/minute")
 async def trigger_sync(
+    request: Request,
     source: str,
     user: dict = Depends(require_api_admin),
     session: Session = Depends(get_session),
