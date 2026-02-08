@@ -39,6 +39,9 @@ services:
       ROOT_PATH: /tools3/taxi
     ports:
       - "127.0.0.1:8010:8000"
+    networks:
+      - default
+      - dashboard_backend
     depends_on:
       taxi-db:
         condition: service_healthy
@@ -65,6 +68,11 @@ services:
       - taxi_imports:/app/imports
     healthcheck:
       disable: true
+
+networks:
+  dashboard_backend:
+    external:
+      name: dashboard_backend
 
 volumes:
   taxi_pg_data:
