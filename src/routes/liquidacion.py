@@ -22,15 +22,57 @@ from src.template_config import templates
 router = APIRouter()
 
 
-def _get_daily_data(session: Session, driver_id: str, vehicle, current: date) -> dict:
+def _extract_license_number(driver: Driver) -> str | None:
+    """Extract numeric license from driver's license_number field.
+
+    Driver license_number format: "361 - 8921LYW" or "092 - 1234ABC"
+    Returns: "361", "092", etc.
+    """
+    lic = driver.license_number.strip()
+    if " - " in lic:
+        return lic.split(" - ")[0].strip()
+    return lic
+
+
+def _resolve_vehicle(session: Session, driver: Driver) -> Vehicle | None:
+    """Resolve vehicle from driver's license_number."""
+    lic_num = _extract_license_number(driver)
+    if not lic_num:
+        return None
+
+    # Try exact match first, then with leading zeros stripped
+    vehicle = session.query(Vehicle).filter(
+        Vehicle.license_number == lic_num,
+        Vehicle.is_active == True,
+    ).first()
+
+    if not vehicle:
+        # Try stripping leading zeros on both sides
+        vehicles = session.query(Vehicle).filter_by(is_active=True).all()
+        for v in vehicles:
+            if v.license_number.strip().lstrip("0") == lic_num.lstrip("0"):
+                return v
+
+    return vehicle
+
+
+def _get_daily_data(session: Session, driver_id: str, vehicle: Vehicle | None,
+                    license_number: str | None, current: date) -> dict:
     """Gather all daily data needed for settlement calculation."""
     vehicle_id = vehicle.id if vehicle else None
 
-    # Get trips for this day
-    day_trips = session.query(Trip).filter(
-        Trip.driver_id == driver_id,
-        func.date(Trip.started_at) == current,
-    ).all()
+    # Get trips for this day (by driver_id OR vehicle_id)
+    trip_filters = [func.date(Trip.started_at) == current]
+    if driver_id and vehicle_id:
+        trip_filters.append(
+            (Trip.driver_id == driver_id) | (Trip.vehicle_id == vehicle_id)
+        )
+    elif driver_id:
+        trip_filters.append(Trip.driver_id == driver_id)
+    elif vehicle_id:
+        trip_filters.append(Trip.vehicle_id == vehicle_id)
+
+    day_trips = session.query(Trip).filter(*trip_filters).all()
 
     # Prima amount
     prima_amount = sum(
@@ -62,21 +104,34 @@ def _get_daily_data(session: Session, driver_id: str, vehicle, current: date) ->
         if t.source == "freenow" and t.fare_type == "FIXED" and t.payment_method == "APP"
     )
 
-    # Uber: query UberDailySummary
+    # Uber: query UberDailySummary by license_number (primary) or vehicle_id (fallback)
     uber_t3_fixed = Decimal("0.00")
     uber_total_payment = Decimal("0.00")
-    if vehicle_id:
+    uber_row = None
+    if license_number:
+        uber_row = session.query(UberDailySummary).filter(
+            UberDailySummary.date == current,
+            UberDailySummary.license_number == license_number,
+        ).first()
+    if not uber_row and vehicle_id:
         uber_row = session.query(UberDailySummary).filter(
             UberDailySummary.date == current,
             UberDailySummary.vehicle_id == vehicle_id,
         ).first()
-        if uber_row:
-            uber_t3_fixed = Decimal(str(uber_row.t3_fixed or 0))
-            uber_total_payment = Decimal(str(uber_row.total_payment or 0))
+    if uber_row:
+        uber_t3_fixed = Decimal(str(uber_row.t3_fixed or 0))
+        uber_total_payment = Decimal(str(uber_row.total_payment or 0))
 
-    # TPV/VISA: query TpvDailyTotal
+    # TPV/VISA: query TpvDailyTotal by license_number (primary) or vehicle_id (fallback)
     tpv_visa_total = Decimal("0.00")
-    if vehicle_id:
+    if license_number:
+        tpv_result = session.query(func.sum(TpvDailyTotal.amount)).filter(
+            TpvDailyTotal.date == current,
+            TpvDailyTotal.license_number == license_number,
+        ).scalar()
+        if tpv_result:
+            tpv_visa_total = Decimal(str(tpv_result))
+    if tpv_visa_total == 0 and vehicle_id:
         tpv_result = session.query(func.sum(TpvDailyTotal.amount)).filter(
             TpvDailyTotal.date == current,
             TpvDailyTotal.vehicle_id == vehicle_id,
@@ -84,7 +139,7 @@ def _get_daily_data(session: Session, driver_id: str, vehicle, current: date) ->
         if tpv_result:
             tpv_visa_total = Decimal(str(tpv_result))
 
-    # Fuel expenses
+    # Fuel expenses (by vehicle_id)
     fuel_total = Decimal("0.00")
     if vehicle_id:
         fuel_result = session.query(func.sum(FuelExpense.amount)).filter(
@@ -94,7 +149,7 @@ def _get_daily_data(session: Session, driver_id: str, vehicle, current: date) ->
         if fuel_result:
             fuel_total = Decimal(str(fuel_result))
 
-    # Other expenses
+    # Other expenses (by driver_id)
     other_result = session.query(func.sum(OtherExpense.amount)).filter(
         OtherExpense.date == current,
         OtherExpense.driver_id == driver_id,
@@ -125,13 +180,13 @@ def _build_driver_config(driver: Driver) -> dict:
     }
 
 
-def _calculate_range(session, driver, vehicle, sd, ed):
+def _calculate_range(session, driver, vehicle, license_number, sd, ed):
     """Calculate settlements for a date range."""
     driver_config = _build_driver_config(driver)
     results = []
     current = sd
     while current <= ed:
-        data = _get_daily_data(session, driver.id, vehicle, current)
+        data = _get_daily_data(session, driver.id, vehicle, license_number, current)
         settlement = calculate_daily_settlement(
             driver_config=driver_config,
             **data,
@@ -181,14 +236,10 @@ async def liquidacion_page(
         sd = date.fromisoformat(start_date)
         ed = date.fromisoformat(end_date)
 
-        vehicle = None
         if driver:
-            vehicle = session.query(Vehicle).filter_by(
-                owner_id=driver.owner_id, is_active=True
-            ).first()
-
-        if driver:
-            results = _calculate_range(session, driver, vehicle, sd, ed)
+            license_number = _extract_license_number(driver)
+            vehicle = _resolve_vehicle(session, driver)
+            results = _calculate_range(session, driver, vehicle, license_number, sd, ed)
             totals = _calculate_totals(results)
 
     return templates.TemplateResponse(
@@ -228,11 +279,10 @@ async def export_liquidacion(
     sd = date.fromisoformat(start_date)
     ed = date.fromisoformat(end_date)
 
-    vehicle = session.query(Vehicle).filter_by(
-        owner_id=driver.owner_id, is_active=True
-    ).first()
+    license_number = _extract_license_number(driver)
+    vehicle = _resolve_vehicle(session, driver)
 
-    results = _calculate_range(session, driver, vehicle, sd, ed)
+    results = _calculate_range(session, driver, vehicle, license_number, sd, ed)
     totals = _calculate_totals(results)
 
     buffer = export_settlement_to_excel(
@@ -273,11 +323,10 @@ async def export_liquidacion_pdf(
     sd = date.fromisoformat(start_date)
     ed = date.fromisoformat(end_date)
 
-    vehicle = session.query(Vehicle).filter_by(
-        owner_id=driver.owner_id, is_active=True
-    ).first()
+    license_number = _extract_license_number(driver)
+    vehicle = _resolve_vehicle(session, driver)
 
-    results = _calculate_range(session, driver, vehicle, sd, ed)
+    results = _calculate_range(session, driver, vehicle, license_number, sd, ed)
     totals = _calculate_totals(results)
 
     buffer = export_settlement_to_pdf(
