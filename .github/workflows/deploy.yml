@@ -75,3 +75,6 @@ jobs:
             sudo docker stop taxi-worker taxi-api || true
             sudo docker rm taxi-worker taxi-api || true
             sudo docker-compose -f docker-compose.prod.yml up -d
+            # Wait for DB to be healthy, then run migrations
+            sleep 10
+            sudo docker exec taxi-api alembic upgrade head
