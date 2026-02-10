@@ -5,11 +5,11 @@ from datetime import datetime, date
 from decimal import Decimal
 from openpyxl import load_workbook
 
-# ON-prefix to license number mapping
-ON_LICENSE_MAP = {
-    "ON34": "092",
-    "ON35": "1061",
-    "ON36": "361",
+# Terminal prefix (first 2 digits) to license number mapping
+TERMINAL_LICENSE_MAP = {
+    "34": "092",
+    "35": "1061",
+    "36": "361",
 }
 
 
@@ -96,12 +96,16 @@ def parse_lacaixa_xlsx(filepath: str) -> list[dict]:
 
         moviment_str = str(moviment_val).strip()
 
-        # Find matching ON prefix
+        # Match ON or C. entries (TPV card payments and corrections)
+        # Format: "ON 363460767 DDMM" or "C. 363460767 DDMM"
+        # The first 2 digits of the terminal number determine the license
         license_number = None
-        for prefix, lic in ON_LICENSE_MAP.items():
-            if moviment_str.startswith(prefix):
-                license_number = lic
-                break
+        if moviment_str.startswith("ON ") or moviment_str.startswith("C. "):
+            parts = moviment_str.split()
+            if len(parts) >= 2:
+                terminal = parts[1]
+                prefix_2 = terminal[:2]
+                license_number = TERMINAL_LICENSE_MAP.get(prefix_2)
 
         if not license_number:
             continue
