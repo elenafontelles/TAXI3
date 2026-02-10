@@ -3,12 +3,12 @@
 {% block head_extra %}
 <style>
     .settlement-table {
-        font-size: 0.85rem;
+        font-size: 0.80rem;
     }
     .settlement-table th,
     .settlement-table td {
         text-align: right;
-        padding: 0.4rem 0.5rem;
+        padding: 0.3rem 0.4rem;
         white-space: nowrap;
     }
     .settlement-table th:first-child,
@@ -31,13 +31,6 @@
 
 {% block content %}
 <h4>Liquidacion</h4>
-
-{% if pending_count > 0 %}
-<div class="alert alert-warning" role="alert">
-    <strong>Atencion:</strong> Hay {{ pending_count }} elemento(s) pendiente(s) de validacion.
-    <a href="{{ root_path }}/validacion" class="alert-link">Revisar validaciones</a>
-</div>
-{% endif %}
 
 <div class="card mb-4">
     <div class="card-header">Generar Cierre</div>
@@ -110,18 +103,23 @@
                 <thead class="table-dark">
                     <tr>
                         <th>Fecha</th>
-                        <th>Rec. Prima</th>
-                        <th>Rec. FreeNow</th>
-                        <th>Rec. Uber</th>
-                        <th>Rec. TOTAL</th>
-                        <th>VISA</th>
-                        <th>Pago APP FN</th>
-                        <th>Pago APP Uber</th>
-                        <th>Cash</th>
+                        <th>Prima</th>
+                        <th>FreeNow</th>
+                        <th>Uber T3</th>
+                        <th>Rec.TOTAL</th>
+                        <th>Incidencias</th>
+                        <th>Rec.Neta</th>
                         <th>IVA</th>
+                        <th>Base Imp.</th>
                         <th>%</th>
-                        <th>Parte Cond.</th>
-                        <th>Deuda</th>
+                        <th>Parte Prop.</th>
+                        <th>TPV/VISA</th>
+                        <th>App FN</th>
+                        <th>App Uber</th>
+                        <th>Gasolina</th>
+                        <th>Otros</th>
+                        <th>Anticipado</th>
+                        <th>Liquidacion</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -129,18 +127,23 @@
                     <tr>
                         <td>{{ r.date.strftime('%d/%m/%Y') }}</td>
                         <td>{{ "%.2f"|format(r.prima_amount) }}</td>
-                        <td>{{ "%.2f"|format(r.freenow_net) }}</td>
-                        <td>{{ "%.2f"|format(r.uber_net) }}</td>
-                        <td>{{ "%.2f"|format(r.rec_total) }}</td>
-                        <td>{{ "%.2f"|format(r.visa_total) }}</td>
-                        <td>{{ "%.2f"|format(r.freenow_app_paid) }}</td>
-                        <td>{{ "%.2f"|format(r.uber_app_paid) }}</td>
-                        <td>{{ "%.2f"|format(r.cash) }}</td>
-                        <td>{{ "%.2f"|format(r.vat) }}</td>
+                        <td>{{ "%.2f"|format(r.freenow_fixed_bruto) }}</td>
+                        <td>{{ "%.2f"|format(r.uber_t3_fixed) }}</td>
+                        <td>{{ "%.2f"|format(r.recaudacion_total) }}</td>
+                        <td>{{ "%.2f"|format(r.incidents_amount) }}</td>
+                        <td>{{ "%.2f"|format(r.recaudacion_neta) }}</td>
+                        <td>{{ "%.2f"|format(r.iva) }}</td>
+                        <td>{{ "%.2f"|format(r.base_imponible) }}</td>
                         <td>{{ "%.0f"|format(r.driver_pct) }}%</td>
-                        <td>{{ "%.2f"|format(r.driver_share) }}</td>
-                        <td class="{% if r.debt > 0 %}positive{% elif r.debt < 0 %}negative{% endif %}">
-                            {{ "%.2f"|format(r.debt) }}
+                        <td>{{ "%.2f"|format(r.parte_proporcional) }}</td>
+                        <td>{{ "%.2f"|format(r.tpv_visa_total) }}</td>
+                        <td>{{ "%.2f"|format(r.freenow_app) }}</td>
+                        <td>{{ "%.2f"|format(r.uber_total_payment) }}</td>
+                        <td>{{ "%.2f"|format(r.fuel_total) }}</td>
+                        <td>{{ "%.2f"|format(r.other_expenses_total) }}</td>
+                        <td>{{ "%.2f"|format(r.anticipado) }}</td>
+                        <td class="{% if r.liquidacion > 0 %}positive{% elif r.liquidacion < 0 %}negative{% endif %}">
+                            {{ "%.2f"|format(r.liquidacion) }}
                         </td>
                     </tr>
                     {% endfor %}
@@ -149,18 +152,23 @@
                     <tr class="totals-row">
                         <td>TOTALES</td>
                         <td>{{ "%.2f"|format(totals.prima_amount) }}</td>
-                        <td>{{ "%.2f"|format(totals.freenow_net) }}</td>
-                        <td>{{ "%.2f"|format(totals.uber_net) }}</td>
-                        <td>{{ "%.2f"|format(totals.rec_total) }}</td>
-                        <td>{{ "%.2f"|format(totals.visa_total) }}</td>
-                        <td>{{ "%.2f"|format(totals.freenow_app_paid) }}</td>
-                        <td>{{ "%.2f"|format(totals.uber_app_paid) }}</td>
-                        <td>{{ "%.2f"|format(totals.cash) }}</td>
-                        <td>{{ "%.2f"|format(totals.vat) }}</td>
+                        <td>{{ "%.2f"|format(totals.freenow_fixed_bruto) }}</td>
+                        <td>{{ "%.2f"|format(totals.uber_t3_fixed) }}</td>
+                        <td>{{ "%.2f"|format(totals.recaudacion_total) }}</td>
+                        <td>{{ "%.2f"|format(totals.incidents_amount) }}</td>
+                        <td>{{ "%.2f"|format(totals.recaudacion_neta) }}</td>
+                        <td>{{ "%.2f"|format(totals.iva) }}</td>
+                        <td>{{ "%.2f"|format(totals.base_imponible) }}</td>
                         <td>-</td>
-                        <td>{{ "%.2f"|format(totals.driver_share) }}</td>
-                        <td class="{% if totals.debt > 0 %}positive{% elif totals.debt < 0 %}negative{% endif %}">
-                            {{ "%.2f"|format(totals.debt) }}
+                        <td>{{ "%.2f"|format(totals.parte_proporcional) }}</td>
+                        <td>{{ "%.2f"|format(totals.tpv_visa_total) }}</td>
+                        <td>{{ "%.2f"|format(totals.freenow_app) }}</td>
+                        <td>{{ "%.2f"|format(totals.uber_total_payment) }}</td>
+                        <td>{{ "%.2f"|format(totals.fuel_total) }}</td>
+                        <td>{{ "%.2f"|format(totals.other_expenses_total) }}</td>
+                        <td>{{ "%.2f"|format(totals.anticipado) }}</td>
+                        <td class="{% if totals.liquidacion > 0 %}positive{% elif totals.liquidacion < 0 %}negative{% endif %}">
+                            {{ "%.2f"|format(totals.liquidacion) }}
                         </td>
                     </tr>
                 </tfoot>
@@ -169,15 +177,15 @@
     </div>
 </div>
 
-{% if totals.debt %}
+{% if totals.liquidacion %}
 <div class="card mt-4">
     <div class="card-body">
         <h5 class="card-title">Resumen Final</h5>
         <p class="card-text">
-            {% if totals.debt > 0 %}
-            <span class="fs-4 positive">El propietario debe al conductor: <strong>{{ "%.2f"|format(totals.debt) }} EUR</strong></span>
-            {% elif totals.debt < 0 %}
-            <span class="fs-4 negative">El conductor debe al propietario: <strong>{{ "%.2f"|format(totals.debt|abs) }} EUR</strong></span>
+            {% if totals.liquidacion > 0 %}
+            <span class="fs-4 positive">El propietario debe al conductor: <strong>{{ "%.2f"|format(totals.liquidacion) }} EUR</strong></span>
+            {% elif totals.liquidacion < 0 %}
+            <span class="fs-4 negative">El conductor debe al propietario: <strong>{{ "%.2f"|format(totals.liquidacion|abs) }} EUR</strong></span>
             {% else %}
             <span class="fs-4">Saldo liquidado: <strong>0.00 EUR</strong></span>
             {% endif %}
