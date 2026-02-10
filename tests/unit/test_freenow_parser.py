@@ -12,7 +12,8 @@ def test_parse_freenow_csv():
     assert trips[0]["tips"] == 0.0
     assert trips[0]["tolls"] == 0.0
     assert trips[0]["taxes_vat"] == 1.25  # 10% of 12.50
-    assert trips[0]["payment_method"] == "efectivo"
+    assert trips[0]["payment_method"] == "CASH"
+    assert trips[0]["fare_type"] == "FIXED"
     assert trips[0]["origin_address"] == "Placa Catalunya"
     assert trips[0]["_driver_name"] == "Juan Garcia"
     assert trips[0]["_plate"] == "1234ABC"
@@ -24,9 +25,14 @@ def test_freenow_skips_cancelled():
     assert "BK-003" not in external_ids  # CANCELLED booking excluded
 
 
-def test_freenow_card_payment():
+def test_freenow_app_payment():
     trips = parse_freenow_csv("tests/fixtures/freenow_sample.csv")
-    assert trips[1]["payment_method"] == "tarjeta"
+    assert trips[1]["payment_method"] == "APP"
+
+
+def test_freenow_fare_type_metered():
+    trips = parse_freenow_csv("tests/fixtures/freenow_sample.csv")
+    assert trips[2]["fare_type"] == "METERED"
 
 
 def test_freenow_tolls():

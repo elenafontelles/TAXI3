@@ -28,9 +28,10 @@ def export_settlement_to_excel(
 
     # Column headers
     headers = [
-        "Fecha", "Rec. Prima", "Rec. FreeNow", "Rec. Uber", "Rec. TOTAL",
-        "VISA", "Pago APP FN", "Pago APP Uber", "Cash", "IVA", "%",
-        "Parte Cond.", "Deuda"
+        "Fecha", "Prima", "FreeNow", "Uber T3", "Rec. TOTAL",
+        "Incidencias", "Rec. Neta", "IVA", "Base Imp.", "%",
+        "Parte Prop.", "TPV/VISA", "App FN", "App Uber",
+        "Gasolina", "Otros", "Anticipado", "Liquidacion",
     ]
 
     header_fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
@@ -47,20 +48,25 @@ def export_settlement_to_excel(
     for r in results:
         ws.cell(row=row, column=1, value=r["date"].strftime("%d/%m/%Y"))
         ws.cell(row=row, column=2, value=float(r.get("prima_amount", 0)))
-        ws.cell(row=row, column=3, value=float(r.get("freenow_net", 0)))
-        ws.cell(row=row, column=4, value=float(r.get("uber_net", 0)))
-        ws.cell(row=row, column=5, value=float(r.get("rec_total", 0)))
-        ws.cell(row=row, column=6, value=float(r.get("visa_total", 0)))
-        ws.cell(row=row, column=7, value=float(r.get("freenow_app_paid", 0)))
-        ws.cell(row=row, column=8, value=float(r.get("uber_app_paid", 0)))
-        ws.cell(row=row, column=9, value=float(r.get("cash", 0)))
-        ws.cell(row=row, column=10, value=float(r.get("vat", 0)))
-        ws.cell(row=row, column=11, value=float(r.get("driver_pct", 0)))
-        ws.cell(row=row, column=12, value=float(r.get("driver_share", 0)))
-        ws.cell(row=row, column=13, value=float(r.get("debt", 0)))
+        ws.cell(row=row, column=3, value=float(r.get("freenow_fixed_bruto", 0)))
+        ws.cell(row=row, column=4, value=float(r.get("uber_t3_fixed", 0)))
+        ws.cell(row=row, column=5, value=float(r.get("recaudacion_total", 0)))
+        ws.cell(row=row, column=6, value=float(r.get("incidents_amount", 0)))
+        ws.cell(row=row, column=7, value=float(r.get("recaudacion_neta", 0)))
+        ws.cell(row=row, column=8, value=float(r.get("iva", 0)))
+        ws.cell(row=row, column=9, value=float(r.get("base_imponible", 0)))
+        ws.cell(row=row, column=10, value=float(r.get("driver_pct", 0)))
+        ws.cell(row=row, column=11, value=float(r.get("parte_proporcional", 0)))
+        ws.cell(row=row, column=12, value=float(r.get("tpv_visa_total", 0)))
+        ws.cell(row=row, column=13, value=float(r.get("freenow_app", 0)))
+        ws.cell(row=row, column=14, value=float(r.get("uber_total_payment", 0)))
+        ws.cell(row=row, column=15, value=float(r.get("fuel_total", 0)))
+        ws.cell(row=row, column=16, value=float(r.get("other_expenses_total", 0)))
+        ws.cell(row=row, column=17, value=float(r.get("anticipado", 0)))
+        ws.cell(row=row, column=18, value=float(r.get("liquidacion", 0)))
 
         # Format numbers
-        for col in range(2, 14):
+        for col in range(2, 19):
             ws.cell(row=row, column=col).number_format = '#,##0.00'
 
         row += 1
@@ -70,9 +76,12 @@ def export_settlement_to_excel(
     ws.cell(row=row, column=1, value="TOTAL").font = Font(bold=True)
 
     total_cols = {
-        2: "prima_amount", 3: "freenow_net", 4: "uber_net", 5: "rec_total",
-        6: "visa_total", 7: "freenow_app_paid", 8: "uber_app_paid", 9: "cash",
-        10: "vat", 12: "driver_share", 13: "debt"
+        2: "prima_amount", 3: "freenow_fixed_bruto", 4: "uber_t3_fixed",
+        5: "recaudacion_total", 6: "incidents_amount", 7: "recaudacion_neta",
+        8: "iva", 9: "base_imponible", 11: "parte_proporcional",
+        12: "tpv_visa_total", 13: "freenow_app", 14: "uber_total_payment",
+        15: "fuel_total", 16: "other_expenses_total",
+        17: "anticipado", 18: "liquidacion",
     }
 
     for col, key in total_cols.items():
@@ -82,7 +91,7 @@ def export_settlement_to_excel(
         cell.number_format = '#,##0.00'
 
     # Column widths
-    col_widths = [12, 12, 12, 12, 12, 10, 12, 12, 10, 10, 6, 12, 10]
+    col_widths = [12, 10, 10, 10, 12, 12, 12, 10, 10, 6, 12, 10, 10, 10, 10, 10, 12, 12]
     for i, width in enumerate(col_widths, 1):
         ws.column_dimensions[get_column_letter(i)].width = width
 

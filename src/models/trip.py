@@ -36,6 +36,7 @@ class Trip(Base):
     payout_amount: Mapped[float | None] = mapped_column(Numeric(10, 2))
     amount_breakdown: Mapped[dict | None] = mapped_column(JSON, default=dict)
     payment_method: Mapped[str | None] = mapped_column(String(20))
+    fare_type: Mapped[str | None] = mapped_column(String(20))
     tariff_code: Mapped[str | None] = mapped_column(String(20))
     raw_data: Mapped[dict | None] = mapped_column(JSON)
     # Cross-platform linking: Prima trip (0 amount) -> FreeNow/Uber trip (with amount)

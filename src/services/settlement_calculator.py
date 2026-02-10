@@ -63,95 +63,99 @@ def get_driver_percentage(
 
 def calculate_daily_settlement(
     prima_amount: Decimal,
-    freenow_bruto: Decimal,
-    uber_net: Decimal,
-    visa_total: Decimal,
-    freenow_app_paid: Decimal,
-    uber_app_paid: Decimal,
-    freenow_commission: Decimal,
-    uber_commission: Decimal,
+    freenow_fixed_bruto: Decimal,
+    uber_t3_fixed: Decimal,
+    incidents_amount: Decimal,
+    tpv_visa_total: Decimal,
+    freenow_app_paid_bruto: Decimal,
+    uber_total_payment: Decimal,
+    fuel_total: Decimal,
+    other_expenses_total: Decimal,
     driver_config: dict,
 ) -> dict:
     """Calculate complete daily settlement for a driver.
 
     Args:
         prima_amount: Prima taxi meter earnings
-        freenow_bruto: FreeNow gross amount
-        uber_net: Uber net amount
-        visa_total: Total VISA payments
-        freenow_app_paid: Amount paid through FreeNow app
-        uber_app_paid: Amount paid through Uber app
-        freenow_commission: FreeNow platform commission
-        uber_commission: Uber platform commission
+        freenow_fixed_bruto: FreeNow FIXED fare gross amount (adds to recaudacion)
+        uber_t3_fixed: Uber T3 fixed amount (adds to recaudacion)
+        incidents_amount: Total incident amounts to deduct
+        tpv_visa_total: Total TPV/VISA daily total
+        freenow_app_paid_bruto: FreeNow APP-paid FIXED fare gross (paid by app)
+        uber_total_payment: Uber total payment (paid by app)
+        fuel_total: Total fuel expenses
+        other_expenses_total: Total other expenses
         driver_config: Dict with driver commission settings:
-            - commission_base_pct: Base driver percentage
-            - commission_bonus_pct: Bonus percentage above threshold
+            - prima_base_pct: Base driver percentage
+            - prima_bonus_pct: Bonus percentage above threshold
             - commission_threshold: Threshold for bonus percentage
             - freenow_commission_driver_pct: % of FreeNow commission driver pays
-            - uber_commission_driver_pct: % of Uber commission driver pays
+            - fuel_deducted_from_driver: Whether fuel is deducted from driver
 
     Returns:
-        Dict with all settlement values:
-            - prima_amount, freenow_bruto, freenow_net, uber_net
-            - rec_total: Total recognized earnings
-            - visa_total, freenow_app_paid, uber_app_paid
-            - vat: VAT amount (10%)
-            - driver_pct: Applied driver percentage
-            - commission_charge: Commission charged to driver
-            - driver_share: Driver's share after commission
-            - cash: Cash collected by driver
-            - debt: Settlement balance (positive = owner owes driver)
+        Dict with all settlement values
     """
-    # Calculate FreeNow net from bruto
-    freenow_net = calculate_freenow_net(freenow_bruto)
+    # 1. Recaudacion total = prima + freenow_fixed + uber_t3_fixed
+    recaudacion_total = prima_amount + freenow_fixed_bruto + uber_t3_fixed
 
-    # Calculate total recognized earnings
-    rec_total = prima_amount + freenow_net + uber_net
+    # 2. Recaudacion neta = recaudacion_total - incidencias
+    recaudacion_neta = recaudacion_total - incidents_amount
 
-    # Calculate VAT
-    vat = calculate_vat(rec_total)
+    # 3. IVA = 10% de recaudacion_neta
+    iva = calculate_vat(recaudacion_neta)
 
-    # Determine driver percentage
+    # 4. Base imponible = recaudacion_neta - IVA
+    base_imponible = recaudacion_neta - iva
+
+    # 5. Porcentaje taxista
     driver_pct = get_driver_percentage(
-        rec_total,
-        Decimal(str(driver_config["commission_base_pct"])),
-        Decimal(str(driver_config["commission_bonus_pct"])),
+        recaudacion_neta,
+        Decimal(str(driver_config["prima_base_pct"])),
+        Decimal(str(driver_config["prima_bonus_pct"])),
         Decimal(str(driver_config["commission_threshold"])),
     )
 
-    # Calculate commission charge to driver
-    freenow_driver_pct = Decimal(str(driver_config["freenow_commission_driver_pct"]))
-    uber_driver_pct = Decimal(str(driver_config["uber_commission_driver_pct"]))
-    commission_charge = (
-        freenow_commission * freenow_driver_pct / 100 +
-        uber_commission * uber_driver_pct / 100
+    # 6. Parte proporcional = base_imponible * pct / 100
+    parte_proporcional = (
+        base_imponible * driver_pct / 100
     ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
-    # Calculate driver share (based on base imponible = rec_total - vat)
-    base_imponible = rec_total - vat
-    driver_share = (
-        base_imponible * driver_pct / 100 - commission_charge
-    ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    # 7. FreeNow APP: si comision driver = 0, propietario asume comision
+    freenow_commission_driver_pct = Decimal(str(driver_config.get("freenow_commission_driver_pct", 0)))
+    if freenow_commission_driver_pct == 0:
+        freenow_app = freenow_app_paid_bruto
+    else:
+        freenow_app = calculate_freenow_net(freenow_app_paid_bruto)
 
-    # Calculate cash (what driver collected minus electronic payments)
-    cash = rec_total - visa_total - freenow_app_paid - uber_app_paid
+    # 8. Anticipado = recaudacion_neta - tpv_visa - freenow_app - uber_total_payment
+    #               - otros_gastos - gasolina (si fuel_deducted_from_driver)
+    fuel_deducted = bool(driver_config.get("fuel_deducted_from_driver", False))
+    fuel_deduction = fuel_total if fuel_deducted else Decimal("0.00")
 
-    # Calculate debt (positive = owner owes driver)
-    debt = driver_share - cash
+    anticipado = (
+        recaudacion_neta - tpv_visa_total - freenow_app - uber_total_payment
+        - other_expenses_total - fuel_deduction
+    )
+
+    # 9. Liquidacion = parte_proporcional - anticipado
+    liquidacion = parte_proporcional - anticipado
 
     return {
         "prima_amount": prima_amount,
-        "freenow_bruto": freenow_bruto,
-        "freenow_net": freenow_net,
-        "uber_net": uber_net,
-        "rec_total": rec_total,
-        "visa_total": visa_total,
-        "freenow_app_paid": freenow_app_paid,
-        "uber_app_paid": uber_app_paid,
-        "vat": vat,
+        "freenow_fixed_bruto": freenow_fixed_bruto,
+        "uber_t3_fixed": uber_t3_fixed,
+        "recaudacion_total": recaudacion_total,
+        "incidents_amount": incidents_amount,
+        "recaudacion_neta": recaudacion_neta,
+        "iva": iva,
+        "base_imponible": base_imponible,
         "driver_pct": driver_pct,
-        "commission_charge": commission_charge,
-        "driver_share": driver_share,
-        "cash": cash,
-        "debt": debt,
+        "parte_proporcional": parte_proporcional,
+        "tpv_visa_total": tpv_visa_total,
+        "freenow_app": freenow_app,
+        "uber_total_payment": uber_total_payment,
+        "fuel_total": fuel_total,
+        "other_expenses_total": other_expenses_total,
+        "anticipado": anticipado,
+        "liquidacion": liquidacion,
     }

@@ -6,11 +6,10 @@ logger = logging.getLogger(__name__)
 
 # Required columns per platform (case-sensitive as they appear in real files)
 REQUIRED_COLUMNS = {
-    "uber": {"Trip ID", "Date/Time", "Fare", "Tip", "Tolls", "Total"},
     "freenow": {
         "BOOKING ID", "BOOKING STATE", "TOUR VALUE", "TOUR TIP",
         "TOLL VALUE", "TAX PERCENTAGE", "PICKUP DATE", "CLOSED DATE",
-        "PAYMENT METHOD", "DRIVER FIRST NAME", "DRIVER LAST NAME",
+        "PAYMENT METHOD", "FARE TYPE", "DRIVER FIRST NAME", "DRIVER LAST NAME",
         "LICENCE PLATE",
     },
     "prima": {
@@ -23,7 +22,6 @@ REQUIRED_COLUMNS = {
 
 # Delimiter per platform
 DELIMITERS = {
-    "uber": ",",
     "freenow": ",",
     "prima": ";",
     "petroprix": ",",

@@ -469,8 +469,8 @@ def _driver_dict(d: Driver) -> dict:
         "license_number": d.license_number,
         "is_owner": d.is_owner,
         "is_active": d.is_active,
-        "commission_base_pct": float(d.commission_base_pct),
-        "commission_bonus_pct": float(d.commission_bonus_pct),
+        "prima_base_pct": float(d.prima_base_pct),
+        "prima_bonus_pct": float(d.prima_bonus_pct),
         "commission_threshold": float(d.commission_threshold),
     }
 

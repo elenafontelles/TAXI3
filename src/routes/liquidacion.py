@@ -4,13 +4,15 @@ from decimal import Decimal
 from fastapi import APIRouter, Request, Depends, Form
 from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, and_
 from src.routes.auth import require_admin
 from src.database import get_session
 from src.models.driver import Driver
 from src.models.trip import Trip
-from src.models.visa_payment import VisaPayment
-from src.models.pending_validation import PendingValidation
+from src.models.tpv_daily_total import TpvDailyTotal
+from src.models.uber_daily_summary import UberDailySummary
+from src.models.fuel_expense import FuelExpense
+from src.models.other_expense import OtherExpense
 from src.models.vehicle import Vehicle
 from src.services.settlement_calculator import calculate_daily_settlement
 from src.services.excel_exporter import export_settlement_to_excel
@@ -18,6 +20,144 @@ from src.services.pdf_exporter import export_settlement_to_pdf
 from src.template_config import templates
 
 router = APIRouter()
+
+
+def _get_daily_data(session: Session, driver_id: str, vehicle, current: date) -> dict:
+    """Gather all daily data needed for settlement calculation."""
+    vehicle_id = vehicle.id if vehicle else None
+
+    # Get trips for this day
+    day_trips = session.query(Trip).filter(
+        Trip.driver_id == driver_id,
+        func.date(Trip.started_at) == current,
+    ).all()
+
+    # Prima amount
+    prima_amount = sum(
+        Decimal(str(t.gross_amount or 0))
+        for t in day_trips
+        if t.source == "prima"
+    )
+
+    # Incidents: prima trips with distance_km == 0 AND duration_minutes < 0.5
+    incidents_amount = sum(
+        Decimal(str(t.gross_amount or 0))
+        for t in day_trips
+        if t.source == "prima"
+        and (t.distance_km is not None and float(t.distance_km) == 0)
+        and (t.duration_minutes is not None and float(t.duration_minutes) < 0.5)
+    )
+
+    # FreeNow FIXED bruto (adds to recaudacion)
+    freenow_fixed_bruto = sum(
+        Decimal(str(t.gross_amount or 0))
+        for t in day_trips
+        if t.source == "freenow" and t.fare_type == "FIXED"
+    )
+
+    # FreeNow APP-paid FIXED bruto
+    freenow_app_paid_bruto = sum(
+        Decimal(str(t.gross_amount or 0))
+        for t in day_trips
+        if t.source == "freenow" and t.fare_type == "FIXED" and t.payment_method == "APP"
+    )
+
+    # Uber: query UberDailySummary
+    uber_t3_fixed = Decimal("0.00")
+    uber_total_payment = Decimal("0.00")
+    if vehicle_id:
+        uber_row = session.query(UberDailySummary).filter(
+            UberDailySummary.date == current,
+            UberDailySummary.vehicle_id == vehicle_id,
+        ).first()
+        if uber_row:
+            uber_t3_fixed = Decimal(str(uber_row.t3_fixed or 0))
+            uber_total_payment = Decimal(str(uber_row.total_payment or 0))
+
+    # TPV/VISA: query TpvDailyTotal
+    tpv_visa_total = Decimal("0.00")
+    if vehicle_id:
+        tpv_result = session.query(func.sum(TpvDailyTotal.amount)).filter(
+            TpvDailyTotal.date == current,
+            TpvDailyTotal.vehicle_id == vehicle_id,
+        ).scalar()
+        if tpv_result:
+            tpv_visa_total = Decimal(str(tpv_result))
+
+    # Fuel expenses
+    fuel_total = Decimal("0.00")
+    if vehicle_id:
+        fuel_result = session.query(func.sum(FuelExpense.amount)).filter(
+            FuelExpense.date == current,
+            FuelExpense.vehicle_id == vehicle_id,
+        ).scalar()
+        if fuel_result:
+            fuel_total = Decimal(str(fuel_result))
+
+    # Other expenses
+    other_result = session.query(func.sum(OtherExpense.amount)).filter(
+        OtherExpense.date == current,
+        OtherExpense.driver_id == driver_id,
+    ).scalar()
+    other_expenses_total = Decimal(str(other_result)) if other_result else Decimal("0.00")
+
+    return {
+        "prima_amount": prima_amount,
+        "freenow_fixed_bruto": freenow_fixed_bruto,
+        "uber_t3_fixed": uber_t3_fixed,
+        "incidents_amount": incidents_amount,
+        "tpv_visa_total": tpv_visa_total,
+        "freenow_app_paid_bruto": freenow_app_paid_bruto,
+        "uber_total_payment": uber_total_payment,
+        "fuel_total": fuel_total,
+        "other_expenses_total": other_expenses_total,
+    }
+
+
+def _build_driver_config(driver: Driver) -> dict:
+    """Build driver config dict from Driver model."""
+    return {
+        "prima_base_pct": driver.prima_base_pct,
+        "prima_bonus_pct": driver.prima_bonus_pct,
+        "commission_threshold": driver.commission_threshold,
+        "freenow_commission_driver_pct": driver.freenow_commission_driver_pct,
+        "fuel_deducted_from_driver": driver.fuel_deducted_from_driver,
+    }
+
+
+def _calculate_range(session, driver, vehicle, sd, ed):
+    """Calculate settlements for a date range."""
+    driver_config = _build_driver_config(driver)
+    results = []
+    current = sd
+    while current <= ed:
+        data = _get_daily_data(session, driver.id, vehicle, current)
+        settlement = calculate_daily_settlement(
+            driver_config=driver_config,
+            **data,
+        )
+        settlement["date"] = current
+        results.append(settlement)
+        current += timedelta(days=1)
+    return results
+
+
+TOTAL_KEYS = [
+    "prima_amount", "freenow_fixed_bruto", "uber_t3_fixed",
+    "recaudacion_total", "incidents_amount", "recaudacion_neta",
+    "iva", "base_imponible", "parte_proporcional",
+    "tpv_visa_total", "freenow_app", "uber_total_payment",
+    "fuel_total", "other_expenses_total", "anticipado", "liquidacion",
+]
+
+
+def _calculate_totals(results: list[dict]) -> dict:
+    """Sum up all numeric settlement fields."""
+    totals = {}
+    if results:
+        for key in TOTAL_KEYS:
+            totals[key] = sum(r.get(key, Decimal("0")) for r in results)
+    return totals
 
 
 @router.get("/liquidacion", response_class=HTMLResponse)
@@ -32,116 +172,24 @@ async def liquidacion_page(
     """Show settlement page with form and results."""
     drivers = session.query(Driver).filter_by(is_active=True).all()
 
-    # Check for pending validations
-    pending_count = session.query(PendingValidation).filter_by(status="pending").count()
-
     results = []
     driver = None
+    totals = {}
 
     if driver_id and start_date and end_date:
         driver = session.get(Driver, driver_id)
         sd = date.fromisoformat(start_date)
         ed = date.fromisoformat(end_date)
 
-        # Get the vehicle for the driver (via owner relationship)
         vehicle = None
         if driver:
             vehicle = session.query(Vehicle).filter_by(
                 owner_id=driver.owner_id, is_active=True
             ).first()
 
-        # Generate daily settlements for date range
-        current = sd
-        while current <= ed:
-            # Get trips for this day
-            day_trips = session.query(Trip).filter(
-                Trip.driver_id == driver_id,
-                func.date(Trip.started_at) == current,
-            ).all()
-
-            prima_amount = sum(
-                Decimal(str(t.gross_amount or 0))
-                for t in day_trips
-                if t.source == "prima"
-            )
-            freenow_bruto = sum(
-                Decimal(str(t.gross_amount or 0))
-                for t in day_trips
-                if t.source == "freenow"
-            )
-            uber_net = sum(
-                Decimal(str(t.gross_amount or 0))
-                for t in day_trips
-                if t.source == "uber"
-            )
-
-            # Get VISA total for the day
-            visa_total = Decimal("0")
-            if vehicle:
-                visa_result = session.query(func.sum(VisaPayment.amount)).filter(
-                    VisaPayment.date == current,
-                    VisaPayment.vehicle_id == vehicle.id,
-                ).scalar()
-                if visa_result:
-                    visa_total = Decimal(str(visa_result))
-
-            # FreeNow/Uber app payments (from trips with payment_method="app")
-            freenow_app = sum(
-                Decimal(str(t.gross_amount or 0))
-                for t in day_trips
-                if t.source == "freenow" and t.payment_method == "app"
-            )
-            uber_app = sum(
-                Decimal(str(t.gross_amount or 0))
-                for t in day_trips
-                if t.source == "uber" and t.payment_method == "app"
-            )
-
-            # Calculate commissions
-            freenow_commission = freenow_bruto * Decimal("0.125")  # 12.5% FreeNow commission
-            uber_commission = uber_net * Decimal("0.25")  # 25% Uber commission estimate
-
-            # Calculate settlement
-            settlement = calculate_daily_settlement(
-                prima_amount=prima_amount,
-                freenow_bruto=freenow_bruto,
-                uber_net=uber_net,
-                visa_total=visa_total,
-                freenow_app_paid=freenow_app,
-                uber_app_paid=uber_app,
-                freenow_commission=freenow_commission,
-                uber_commission=uber_commission,
-                driver_config={
-                    "commission_base_pct": driver.commission_base_pct,
-                    "commission_bonus_pct": driver.commission_bonus_pct,
-                    "commission_threshold": driver.commission_threshold,
-                    "freenow_commission_driver_pct": driver.freenow_commission_driver_pct,
-                    "uber_commission_driver_pct": driver.uber_commission_driver_pct,
-                },
-            )
-            settlement["date"] = current
-            settlement["has_incidents"] = any(t.id for t in day_trips)  # simplified
-            results.append(settlement)
-
-            current += timedelta(days=1)
-
-    # Calculate totals
-    totals = {}
-    if results:
-        for key in [
-            "prima_amount",
-            "freenow_net",
-            "uber_net",
-            "rec_total",
-            "visa_total",
-            "freenow_app_paid",
-            "uber_app_paid",
-            "vat",
-            "driver_share",
-            "cash",
-            "debt",
-        ]:
-            totals[key] = sum(r.get(key, Decimal("0")) for r in results)
+        if driver:
+            results = _calculate_range(session, driver, vehicle, sd, ed)
+            totals = _calculate_totals(results)
 
     return templates.TemplateResponse(
         request,
@@ -155,7 +203,6 @@ async def liquidacion_page(
             "end_date": end_date,
             "results": results,
             "totals": totals,
-            "pending_count": pending_count,
         },
     )
 
@@ -181,103 +228,12 @@ async def export_liquidacion(
     sd = date.fromisoformat(start_date)
     ed = date.fromisoformat(end_date)
 
-    # Get the vehicle for the driver (via owner relationship)
     vehicle = session.query(Vehicle).filter_by(
         owner_id=driver.owner_id, is_active=True
     ).first()
 
-    # Generate daily settlements for date range
-    results = []
-    current = sd
-    while current <= ed:
-        # Get trips for this day
-        day_trips = session.query(Trip).filter(
-            Trip.driver_id == driver_id,
-            func.date(Trip.started_at) == current,
-        ).all()
-
-        prima_amount = sum(
-            Decimal(str(t.gross_amount or 0))
-            for t in day_trips
-            if t.source == "prima"
-        )
-        freenow_bruto = sum(
-            Decimal(str(t.gross_amount or 0))
-            for t in day_trips
-            if t.source == "freenow"
-        )
-        uber_net = sum(
-            Decimal(str(t.gross_amount or 0))
-            for t in day_trips
-            if t.source == "uber"
-        )
-
-        # Get VISA total for the day
-        visa_total = Decimal("0")
-        if vehicle:
-            visa_result = session.query(func.sum(VisaPayment.amount)).filter(
-                VisaPayment.date == current,
-                VisaPayment.vehicle_id == vehicle.id,
-            ).scalar()
-            if visa_result:
-                visa_total = Decimal(str(visa_result))
-
-        # FreeNow/Uber app payments (from trips with payment_method="app")
-        freenow_app = sum(
-            Decimal(str(t.gross_amount or 0))
-            for t in day_trips
-            if t.source == "freenow" and t.payment_method == "app"
-        )
-        uber_app = sum(
-            Decimal(str(t.gross_amount or 0))
-            for t in day_trips
-            if t.source == "uber" and t.payment_method == "app"
-        )
-
-        # Calculate commissions
-        freenow_commission = freenow_bruto * Decimal("0.125")  # 12.5% FreeNow commission
-        uber_commission = uber_net * Decimal("0.25")  # 25% Uber commission estimate
-
-        # Calculate settlement
-        settlement = calculate_daily_settlement(
-            prima_amount=prima_amount,
-            freenow_bruto=freenow_bruto,
-            uber_net=uber_net,
-            visa_total=visa_total,
-            freenow_app_paid=freenow_app,
-            uber_app_paid=uber_app,
-            freenow_commission=freenow_commission,
-            uber_commission=uber_commission,
-            driver_config={
-                "commission_base_pct": driver.commission_base_pct,
-                "commission_bonus_pct": driver.commission_bonus_pct,
-                "commission_threshold": driver.commission_threshold,
-                "freenow_commission_driver_pct": driver.freenow_commission_driver_pct,
-                "uber_commission_driver_pct": driver.uber_commission_driver_pct,
-            },
-        )
-        settlement["date"] = current
-        results.append(settlement)
-
-        current += timedelta(days=1)
-
-    # Calculate totals
-    totals = {}
-    if results:
-        for key in [
-            "prima_amount",
-            "freenow_net",
-            "uber_net",
-            "rec_total",
-            "visa_total",
-            "freenow_app_paid",
-            "uber_app_paid",
-            "vat",
-            "driver_share",
-            "cash",
-            "debt",
-        ]:
-            totals[key] = sum(r.get(key, Decimal("0")) for r in results)
+    results = _calculate_range(session, driver, vehicle, sd, ed)
+    totals = _calculate_totals(results)
 
     buffer = export_settlement_to_excel(
         driver_name=driver.name,
@@ -321,77 +277,8 @@ async def export_liquidacion_pdf(
         owner_id=driver.owner_id, is_active=True
     ).first()
 
-    results = []
-    current = sd
-    while current <= ed:
-        day_trips = session.query(Trip).filter(
-            Trip.driver_id == driver_id,
-            func.date(Trip.started_at) == current,
-        ).all()
-
-        prima_amount = sum(
-            Decimal(str(t.gross_amount or 0))
-            for t in day_trips if t.source == "prima"
-        )
-        freenow_bruto = sum(
-            Decimal(str(t.gross_amount or 0))
-            for t in day_trips if t.source == "freenow"
-        )
-        uber_net = sum(
-            Decimal(str(t.gross_amount or 0))
-            for t in day_trips if t.source == "uber"
-        )
-
-        visa_total = Decimal("0")
-        if vehicle:
-            visa_result = session.query(func.sum(VisaPayment.amount)).filter(
-                VisaPayment.date == current,
-                VisaPayment.vehicle_id == vehicle.id,
-            ).scalar()
-            if visa_result:
-                visa_total = Decimal(str(visa_result))
-
-        freenow_app = sum(
-            Decimal(str(t.gross_amount or 0))
-            for t in day_trips if t.source == "freenow" and t.payment_method == "app"
-        )
-        uber_app = sum(
-            Decimal(str(t.gross_amount or 0))
-            for t in day_trips if t.source == "uber" and t.payment_method == "app"
-        )
-
-        freenow_commission = freenow_bruto * Decimal("0.125")
-        uber_commission = uber_net * Decimal("0.25")
-
-        settlement = calculate_daily_settlement(
-            prima_amount=prima_amount,
-            freenow_bruto=freenow_bruto,
-            uber_net=uber_net,
-            visa_total=visa_total,
-            freenow_app_paid=freenow_app,
-            uber_app_paid=uber_app,
-            freenow_commission=freenow_commission,
-            uber_commission=uber_commission,
-            driver_config={
-                "commission_base_pct": driver.commission_base_pct,
-                "commission_bonus_pct": driver.commission_bonus_pct,
-                "commission_threshold": driver.commission_threshold,
-                "freenow_commission_driver_pct": driver.freenow_commission_driver_pct,
-                "uber_commission_driver_pct": driver.uber_commission_driver_pct,
-            },
-        )
-        settlement["date"] = current
-        results.append(settlement)
-        current += timedelta(days=1)
-
-    totals = {}
-    if results:
-        for key in [
-            "prima_amount", "freenow_net", "uber_net", "rec_total",
-            "visa_total", "freenow_app_paid", "uber_app_paid",
-            "vat", "driver_share", "cash", "debt",
-        ]:
-            totals[key] = sum(r.get(key, Decimal("0")) for r in results)
+    results = _calculate_range(session, driver, vehicle, sd, ed)
+    totals = _calculate_totals(results)
 
     buffer = export_settlement_to_pdf(
         driver_name=driver.name,

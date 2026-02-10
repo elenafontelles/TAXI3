@@ -1,12 +1,20 @@
-"""Parse La Caixa VISA Excel export into normalized payment dicts."""
+"""Parse La Caixa bank statement XLSX into daily TPV totals."""
+from __future__ import annotations
 import re
-from datetime import datetime
+from datetime import datetime, date
 from decimal import Decimal
 from openpyxl import load_workbook
 
+# ON-prefix to license number mapping
+ON_LICENSE_MAP = {
+    "ON34": "092",
+    "ON35": "1061",
+    "ON36": "361",
+}
+
 
 def detect_lacaixa_file(filepath: str) -> bool:
-    """Detect if file is a La Caixa VISA export."""
+    """Detect if file is a La Caixa bank statement extract."""
     if not filepath.endswith(".xlsx"):
         return False
     try:
@@ -14,60 +22,106 @@ def detect_lacaixa_file(filepath: str) -> bool:
         sheet = wb.active
         first_cell = sheet.cell(1, 1).value
         wb.close()
-        return first_cell and "Llistat d'operacions" in str(first_cell)
+        return first_cell and "Moviments del compte" in str(first_cell)
     except Exception:
         return False
 
 
+def _parse_date(value) -> date | None:
+    """Parse a cell value into a date object."""
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    if value is None:
+        return None
+    s = str(value).strip()
+    for fmt in ("%d/%m/%Y", "%Y-%m-%d", "%d-%m-%Y"):
+        try:
+            return datetime.strptime(s, fmt).date()
+        except ValueError:
+            continue
+    return None
+
+
+def _parse_amount(value) -> Decimal | None:
+    """Parse an amount value, handling comma decimals and EUR suffix."""
+    if value is None:
+        return None
+    s = str(value).strip().replace(" EUR", "").replace("\xa0", "")
+    # Handle comma as decimal separator (European format)
+    if "," in s and "." in s:
+        s = s.replace(".", "").replace(",", ".")
+    elif "," in s:
+        s = s.replace(",", ".")
+    try:
+        return Decimal(s).quantize(Decimal("0.01"))
+    except Exception:
+        return None
+
+
 def parse_lacaixa_xlsx(filepath: str) -> list[dict]:
-    """Parse La Caixa VISA Excel export.
+    """Parse La Caixa bank statement XLSX extract.
 
     Format:
-    - Row 1: "Llistat d'operacions"
-    - Row 3: Account info with license (e.g., "351269212 TAXI LIC. 1061")
-    - Row 5: Headers
-    - Row 6+: Data rows
+    - Row 1: Title ("Moviments del compte...")
+    - Row 3: Headers (Data, Data valor, Moviment, Mes dades, Import, Saldo)
+    - Row 4+: Data rows
+
+    Filters rows where "Moviment" starts with ON34, ON35 or ON36.
+    Maps ON prefixes to license numbers.
+
+    Returns a list of dicts with date, license_number, amount.
     """
     wb = load_workbook(filepath, read_only=True, data_only=True)
     sheet = wb.active
 
-    # Extract license from row 3
-    license_row = str(sheet.cell(3, 1).value or "")
-    license_match = re.search(r"LIC\.?\s*(\d+)", license_row, re.IGNORECASE)
-    license_num = license_match.group(1) if license_match else None
+    # Read headers from row 3 to determine column positions
+    headers = {}
+    for col in range(1, (sheet.max_column or 6) + 1):
+        val = sheet.cell(3, col).value
+        if val:
+            headers[str(val).strip().lower()] = col
+
+    # Determine column indices (fallback to known positions)
+    col_date = headers.get("data", 1)
+    col_moviment = headers.get("moviment", 3)
+    col_import = headers.get("import", 5)
 
     records = []
-    for row in sheet.iter_rows(min_row=6, values_only=True):
-        if not row[0]:  # Skip empty rows
+    for row in sheet.iter_rows(min_row=4, values_only=False):
+        moviment_val = row[col_moviment - 1].value if col_moviment <= len(row) else None
+        if not moviment_val:
             continue
 
-        # Parse datetime (format: "2026-02-03T10:54:42.618")
-        dt_str = str(row[0])
-        try:
-            dt = datetime.fromisoformat(dt_str.split(".")[0])
-        except ValueError:
+        moviment_str = str(moviment_val).strip()
+
+        # Find matching ON prefix
+        license_number = None
+        for prefix, lic in ON_LICENSE_MAP.items():
+            if moviment_str.startswith(prefix):
+                license_number = lic
+                break
+
+        if not license_number:
             continue
 
-        # Parse amount (format: "28,00 EUR")
-        amount_str = str(row[5] or "0").replace(" EUR", "").replace(",", ".")
-        try:
-            amount = Decimal(amount_str)
-        except Exception:
+        # Parse date
+        date_val = row[col_date - 1].value if col_date <= len(row) else None
+        day = _parse_date(date_val)
+        if not day:
             continue
 
-        # Extract card last 4 (format: "************3386")
-        card_full = str(row[2] or "")
-        card_last4 = card_full[-4:] if len(card_full) >= 4 else card_full
+        # Parse amount
+        import_val = row[col_import - 1].value if col_import <= len(row) else None
+        amount = _parse_amount(import_val)
+        if amount is None or amount == 0:
+            continue
 
         records.append({
-            "date": dt.date(),
-            "time": dt.time(),
-            "terminal_id": str(row[1] or ""),
-            "card_last4": card_last4,
-            "brand": str(row[3] or "VISA"),
-            "amount": amount,
-            "status": str(row[6] or ""),
-            "_license": license_num,
+            "date": day,
+            "license_number": license_number,
+            "amount": abs(amount),
         })
 
     wb.close()

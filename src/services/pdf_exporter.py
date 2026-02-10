@@ -28,22 +28,27 @@ def export_settlement_to_pdf(
 
     # Table headers
     headers = [
-        ("Fecha", 22),
-        ("Prima", 20),
-        ("FreeNow", 20),
-        ("Uber", 20),
-        ("TOTAL", 20),
-        ("VISA", 18),
-        ("App FN", 20),
-        ("App Uber", 22),
-        ("Cash", 18),
-        ("IVA", 18),
-        ("%", 12),
-        ("Conductor", 22),
-        ("Deuda", 20),
+        ("Fecha", 18),
+        ("Prima", 14),
+        ("FreeNow", 14),
+        ("Uber T3", 14),
+        ("Rec.TOT", 15),
+        ("Incid.", 13),
+        ("Rec.Net", 15),
+        ("IVA", 12),
+        ("Base", 14),
+        ("%", 8),
+        ("P.Prop", 14),
+        ("TPV", 14),
+        ("AppFN", 14),
+        ("AppUber", 15),
+        ("Gas.", 12),
+        ("Otros", 12),
+        ("Antic.", 14),
+        ("Liquid.", 14),
     ]
 
-    pdf.set_font("Helvetica", "B", 8)
+    pdf.set_font("Helvetica", "B", 6)
     pdf.set_fill_color(68, 114, 196)
     pdf.set_text_color(255, 255, 255)
 
@@ -52,7 +57,7 @@ def export_settlement_to_pdf(
     pdf.ln()
 
     # Data rows
-    pdf.set_font("Helvetica", "", 7)
+    pdf.set_font("Helvetica", "", 6)
     pdf.set_text_color(0, 0, 0)
 
     for i, r in enumerate(results):
@@ -67,17 +72,22 @@ def export_settlement_to_pdf(
         row_data = [
             date_str,
             _fmt(r.get("prima_amount", 0)),
-            _fmt(r.get("freenow_net", 0)),
-            _fmt(r.get("uber_net", 0)),
-            _fmt(r.get("rec_total", 0)),
-            _fmt(r.get("visa_total", 0)),
-            _fmt(r.get("freenow_app_paid", 0)),
-            _fmt(r.get("uber_app_paid", 0)),
-            _fmt(r.get("cash", 0)),
-            _fmt(r.get("vat", 0)),
+            _fmt(r.get("freenow_fixed_bruto", 0)),
+            _fmt(r.get("uber_t3_fixed", 0)),
+            _fmt(r.get("recaudacion_total", 0)),
+            _fmt(r.get("incidents_amount", 0)),
+            _fmt(r.get("recaudacion_neta", 0)),
+            _fmt(r.get("iva", 0)),
+            _fmt(r.get("base_imponible", 0)),
             _fmt(r.get("driver_pct", 0)),
-            _fmt(r.get("driver_share", 0)),
-            _fmt(r.get("debt", 0)),
+            _fmt(r.get("parte_proporcional", 0)),
+            _fmt(r.get("tpv_visa_total", 0)),
+            _fmt(r.get("freenow_app", 0)),
+            _fmt(r.get("uber_total_payment", 0)),
+            _fmt(r.get("fuel_total", 0)),
+            _fmt(r.get("other_expenses_total", 0)),
+            _fmt(r.get("anticipado", 0)),
+            _fmt(r.get("liquidacion", 0)),
         ]
 
         for j, (_, width) in enumerate(headers):
@@ -86,23 +96,28 @@ def export_settlement_to_pdf(
         pdf.ln()
 
     # Totals row
-    pdf.set_font("Helvetica", "B", 8)
+    pdf.set_font("Helvetica", "B", 6)
     pdf.set_fill_color(217, 225, 242)
 
     total_data = [
         "TOTAL",
         _fmt(totals.get("prima_amount", 0)),
-        _fmt(totals.get("freenow_net", 0)),
-        _fmt(totals.get("uber_net", 0)),
-        _fmt(totals.get("rec_total", 0)),
-        _fmt(totals.get("visa_total", 0)),
-        _fmt(totals.get("freenow_app_paid", 0)),
-        _fmt(totals.get("uber_app_paid", 0)),
-        _fmt(totals.get("cash", 0)),
-        _fmt(totals.get("vat", 0)),
+        _fmt(totals.get("freenow_fixed_bruto", 0)),
+        _fmt(totals.get("uber_t3_fixed", 0)),
+        _fmt(totals.get("recaudacion_total", 0)),
+        _fmt(totals.get("incidents_amount", 0)),
+        _fmt(totals.get("recaudacion_neta", 0)),
+        _fmt(totals.get("iva", 0)),
+        _fmt(totals.get("base_imponible", 0)),
         "",
-        _fmt(totals.get("driver_share", 0)),
-        _fmt(totals.get("debt", 0)),
+        _fmt(totals.get("parte_proporcional", 0)),
+        _fmt(totals.get("tpv_visa_total", 0)),
+        _fmt(totals.get("freenow_app", 0)),
+        _fmt(totals.get("uber_total_payment", 0)),
+        _fmt(totals.get("fuel_total", 0)),
+        _fmt(totals.get("other_expenses_total", 0)),
+        _fmt(totals.get("anticipado", 0)),
+        _fmt(totals.get("liquidacion", 0)),
     ]
 
     for j, (_, width) in enumerate(headers):

@@ -12,7 +12,7 @@ Usage:
 import os
 import glob
 from sqlalchemy.orm import Session
-from scripts.parsers.uber_parser import parse_uber_csv
+from scripts.parsers.uber_parser import parse_uber_xlsx
 from scripts.parsers.freenow_parser import parse_freenow_csv
 from scripts.parsers.prima_parser import parse_prima_csv
 from src.models.trip import Trip
@@ -103,7 +103,10 @@ def import_csv_files(
                     result["records_created"] += 1
             else:
                 if source == "uber":
-                    trips = parse_uber_csv(filepath)
+                    # Uber now uses XLSX format with daily summaries
+                    # Skip CSV-based import for uber; use upload route instead
+                    result["errors"].append(f"Uber XLSX import not supported via CLI: {filepath}")
+                    continue
                 else:
                     trips = parse_freenow_csv(filepath)
 

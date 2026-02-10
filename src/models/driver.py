@@ -24,8 +24,9 @@ class Driver(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     # Commission configuration
-    commission_base_pct: Mapped[float] = mapped_column(Numeric(5, 2), default=40.0)
-    commission_bonus_pct: Mapped[float] = mapped_column(Numeric(5, 2), default=45.0)
+    prima_base_pct: Mapped[float] = mapped_column(Numeric(5, 2), default=40.0)
+    prima_bonus_pct: Mapped[float] = mapped_column(Numeric(5, 2), default=45.0)
     commission_threshold: Mapped[float] = mapped_column(Numeric(10, 2), default=300.0)
     freenow_commission_driver_pct: Mapped[float] = mapped_column(Numeric(5, 2), default=0.0)
     uber_commission_driver_pct: Mapped[float] = mapped_column(Numeric(5, 2), default=0.0)
+    fuel_deducted_from_driver: Mapped[bool] = mapped_column(Boolean, default=False)

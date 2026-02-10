@@ -27,8 +27,11 @@ def parse_freenow_csv(filepath: str) -> list[dict]:
             ended_at = datetime.fromisoformat(row["CLOSED DATE"].strip())
             duration = (ended_at - started_at).total_seconds() / 60
 
-            payment_raw = row["PAYMENT METHOD"].strip().lower()
-            payment = "efectivo" if payment_raw == "cash" else "tarjeta"
+            payment_raw = row["PAYMENT METHOD"].strip().upper()
+            payment = "CASH" if payment_raw == "CASH" else "APP"
+
+            fare_type_raw = row.get("FARE TYPE", "").strip().upper()
+            fare_type = fare_type_raw if fare_type_raw in ("FIXED", "METERED") else None
 
             trips.append({
                 "source": "freenow",
@@ -43,6 +46,7 @@ def parse_freenow_csv(filepath: str) -> list[dict]:
                 "tolls": tolls,
                 "payout_amount": gross,
                 "payment_method": payment,
+                "fare_type": fare_type,
                 "origin_address": row["PICKUP LOCATION"].strip() or None,
                 "dest_address": row["DROPOFF LOCATION"].strip() or None,
                 "raw_data": dict(row),

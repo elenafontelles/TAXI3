@@ -10,13 +10,12 @@ from src.routes.auth import require_admin
 from src.database import get_session
 from src.models.driver import Driver
 from src.models.vehicle import Vehicle
-from scripts.parsers.uber_parser import parse_uber_csv
 from scripts.parsers.freenow_parser import parse_freenow_csv
 from scripts.parsers.prima_parser import parse_prima_csv
 from src.models.trip import Trip
-from src.models.visa_payment import VisaPayment
 from src.models.fuel_expense import FuelExpense
-from src.models.pending_validation import PendingValidation
+from src.models.tpv_daily_total import TpvDailyTotal
+from src.models.uber_daily_summary import UberDailySummary
 from src.template_config import templates
 
 logger = logging.getLogger(__name__)
@@ -24,7 +23,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 PARSERS = {
-    "uber": parse_uber_csv,
     "freenow": parse_freenow_csv,
     "prima": parse_prima_csv,
 }
@@ -34,6 +32,7 @@ TRIP_FIELDS = {
     "commission", "taxes_vat", "tips", "tolls", "payout_amount", "payment_method",
     "distance_km", "duration_minutes", "origin_address", "dest_address",
     "origin_lat", "origin_lng", "dest_lat", "dest_lng", "tariff_code",
+    "fare_type",
 }
 
 
@@ -73,11 +72,18 @@ def _build_lookups(session: Session) -> dict:
             if norm in plate_to_vehicle:
                 license_to_vehicle[lic_num] = plate_to_vehicle[norm]
 
+    # License number to vehicle (from vehicles table)
+    license_num_to_vehicle = {}
+    for v in vehicles:
+        lic = v.license_number.strip().lstrip("0")
+        license_num_to_vehicle[lic] = v.id
+
     return {
         "driver_names": driver_names,
         "plate_to_vehicle": plate_to_vehicle,
         "license_to_driver": license_to_driver,
         "license_to_vehicle": license_to_vehicle,
+        "license_num_to_vehicle": license_num_to_vehicle,
     }
 
 
@@ -130,9 +136,13 @@ async def process_upload(
     csv_file: UploadFile = File(...),
     session: Session = Depends(get_session),
 ):
-    # La Caixa VISA upload (XLSX, different flow)
+    # La Caixa bank statement upload (XLSX, different flow)
     if platform == "lacaixa":
         return await _process_lacaixa(request, user, vehicle_id, csv_file, session)
+
+    # Uber daily summary upload (XLSX, different flow)
+    if platform == "uber":
+        return await _process_uber(request, user, csv_file, session)
 
     # Fuel upload (Petroprix CSV / Repsol PDF)
     if platform in ("petroprix", "repsol"):
@@ -297,10 +307,77 @@ async def _process_fuel(request, user, platform, driver_id, vehicle_id, csv_file
     return await _render_result(request, session, user, success=msg)
 
 
+async def _process_uber(request, user, csv_file, session):
+    """Handle Uber daily summary XLSX upload: import UberDailySummary records."""
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx") as tmp:
+        content = await csv_file.read()
+        tmp.write(content)
+        tmp_path = tmp.name
+
+    try:
+        from scripts.parsers.uber_parser import parse_uber_xlsx
+        records = parse_uber_xlsx(tmp_path)
+    except Exception as e:
+        os.unlink(tmp_path)
+        return await _render_result(request, session, user, error=f"Error al parsear Uber XLSX: {e}")
+
+    os.unlink(tmp_path)
+
+    if not records:
+        return await _render_result(request, session, user, error="No se encontraron registros en el archivo")
+
+    lookups = _build_lookups(session)
+    source_file = csv_file.filename or "uber_upload"
+    created = 0
+    skipped = 0
+    unmatched = 0
+
+    for rec in records:
+        lic_key = rec["license_number"].strip().lstrip("0")
+
+        # Resolve vehicle by license number
+        vehicle_id = lookups["license_num_to_vehicle"].get(lic_key)
+        if not vehicle_id:
+            vehicle_id = lookups["license_to_vehicle"].get(lic_key)
+
+        # Deduplicate by date + license_number
+        existing = session.query(UberDailySummary).filter_by(
+            date=rec["date"],
+            license_number=rec["license_number"],
+        ).first()
+        if existing:
+            skipped += 1
+            continue
+
+        summary = UberDailySummary(
+            date=rec["date"],
+            license_number=rec["license_number"],
+            vehicle_id=vehicle_id,
+            total_earnings=rec["total_earnings"],
+            taximeter=rec["taximeter"],
+            refund=rec["refund"],
+            adjustments=rec["adjustments"],
+            t3_fixed=rec["t3_fixed"],
+            total_payment=rec["total_payment"],
+            source_file=source_file,
+        )
+        session.add(summary)
+        created += 1
+
+        if not vehicle_id:
+            unmatched += 1
+
+    session.commit()
+
+    msg = f"Resumen diario Uber importado: {created} registros. Duplicados: {skipped}."
+    if unmatched:
+        msg += f" Sin vehiculo asignado: {unmatched}."
+    return await _render_result(request, session, user, success=msg)
+
+
 async def _process_lacaixa(request, user, vehicle_id, csv_file, session):
-    """Handle La Caixa VISA XLSX upload: import payments and auto-match to trips."""
-    suffix = ".xlsx" if csv_file.filename and csv_file.filename.endswith(".xlsx") else ".csv"
-    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+    """Handle La Caixa bank statement XLSX upload: import TpvDailyTotal records."""
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx") as tmp:
         content = await csv_file.read()
         tmp.write(content)
         tmp_path = tmp.name
@@ -317,115 +394,50 @@ async def _process_lacaixa(request, user, vehicle_id, csv_file, session):
     if not records:
         return await _render_result(request, session, user, error="No se encontraron registros en el archivo")
 
-    # Resolve vehicle from license in file or form selection
-    license_num = records[0].get("_license")
-    if not vehicle_id and license_num:
-        lookups = _build_lookups(session)
-        vehicle_id = lookups["license_to_vehicle"].get(license_num.lstrip("0"), "")
-
-    if not vehicle_id:
-        return await _render_result(request, session, user, error="No se pudo determinar el vehiculo. Selecciona uno manualmente.")
-
+    lookups = _build_lookups(session)
     source_file = csv_file.filename or "lacaixa_upload"
     created = 0
     skipped = 0
-    new_payment_ids = []
+    unmatched = 0
 
     for rec in records:
-        # Deduplicate by date+time+amount+card
-        existing = session.query(VisaPayment).filter_by(
-            date=rec["date"], time=rec["time"],
-            amount=rec["amount"], card_last4=rec["card_last4"],
-            vehicle_id=vehicle_id,
+        lic_key = rec["license_number"].strip().lstrip("0")
+
+        # Resolve vehicle by license number
+        rec_vehicle = lookups["license_num_to_vehicle"].get(lic_key)
+        if not rec_vehicle:
+            rec_vehicle = lookups["license_to_vehicle"].get(lic_key)
+        if not rec_vehicle:
+            rec_vehicle = vehicle_id
+
+        if not rec_vehicle:
+            unmatched += 1
+            continue
+
+        # Deduplicate by date + license_number
+        existing = session.query(TpvDailyTotal).filter_by(
+            date=rec["date"],
+            license_number=rec["license_number"],
         ).first()
         if existing:
             skipped += 1
             continue
 
-        payment = VisaPayment(
+        total = TpvDailyTotal(
             date=rec["date"],
-            time=rec["time"],
-            terminal_id=rec["terminal_id"],
-            card_last4=rec["card_last4"],
-            brand=rec["brand"],
+            vehicle_id=rec_vehicle,
+            license_number=rec["license_number"],
             amount=rec["amount"],
-            vehicle_id=vehicle_id,
             source_file=source_file,
         )
-        session.add(payment)
-        session.flush()
-        new_payment_ids.append(payment.id)
+        session.add(total)
         created += 1
 
     session.commit()
 
-    # Auto-match VISA payments to trips
-    from src.services.visa_matcher import match_visa_to_trip
-    matched = 0
-    unmatched_ids = []
-
-    from datetime import datetime, timedelta
-
-    for pid in new_payment_ids:
-        payment = session.get(VisaPayment, pid)
-        if not payment:
-            continue
-
-        # Find trips on the same day for the same vehicle
-        day_start = datetime.combine(payment.date, datetime.min.time())
-        day_end = day_start + timedelta(days=1)
-        trips = session.query(Trip).filter(
-            Trip.vehicle_id == vehicle_id,
-            Trip.started_at >= day_start,
-            Trip.started_at < day_end,
-        ).all()
-
-        trip_dicts = [
-            {"id": t.id, "ended_at": t.ended_at, "gross_amount": float(t.gross_amount)}
-            for t in trips if t.ended_at
-        ]
-
-        result = match_visa_to_trip(
-            {"date": payment.date, "time": payment.time, "amount": payment.amount},
-            trip_dicts,
-        )
-
-        if result:
-            payment.trip_id = result["trip_id"]
-            payment.tip_amount = result["tip_amount"]
-            matched += 1
-        else:
-            unmatched_ids.append(pid)
-
-    # Create PendingValidation for unmatched payments
-    for pid in unmatched_ids:
-        payment = session.get(VisaPayment, pid)
-        if not payment:
-            continue
-        pv = PendingValidation(
-            validation_type="visa_no_match",
-            status="pending",
-            details={
-                "visa_payment_id": pid,
-                "date": payment.date.isoformat(),
-                "time": payment.time.isoformat(),
-                "amount": float(payment.amount),
-                "card_last4": payment.card_last4,
-                "brand": payment.brand,
-            },
-        )
-        session.add(pv)
-
-    session.commit()
-
-    # Notify about unmatched VISA payments
-    if unmatched_ids:
-        from src.services.email_service import notify_pending_validations
-        await notify_pending_validations(len(unmatched_ids))
-
-    msg = f"Pagos VISA importados: {created}. Duplicados: {skipped}. Enlazados con viaje: {matched}."
-    if unmatched_ids:
-        msg += f" Sin enlace (pendientes de validacion): {len(unmatched_ids)}."
+    msg = f"Totales TPV importados: {created} registros. Duplicados: {skipped}."
+    if unmatched:
+        msg += f" Sin vehiculo asignado: {unmatched}."
     return await _render_result(request, session, user, success=msg)
 
 

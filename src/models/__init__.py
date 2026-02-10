@@ -13,6 +13,8 @@ from src.models.pending_validation import PendingValidation
 from src.models.visa_payment import VisaPayment
 from src.models.fuel_expense import FuelExpense
 from src.models.other_expense import OtherExpense
+from src.models.tpv_daily_total import TpvDailyTotal
+from src.models.uber_daily_summary import UberDailySummary
 
 __all__ = [
     "Owner",
@@ -29,4 +31,6 @@ __all__ = [
     "VisaPayment",
     "FuelExpense",
     "OtherExpense",
+    "TpvDailyTotal",
+    "UberDailySummary",
 ]
