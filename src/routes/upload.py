@@ -176,27 +176,31 @@ async def process_upload(
 
     lookups = _build_lookups(session)
     created = 0
-    skipped = 0
+    updated = 0
     unmatched = 0
     new_trip_ids = []
 
     for t in records:
-        existing = session.query(Trip).filter_by(external_id=t["external_id"], source=t["source"]).first()
-        if existing:
-            skipped += 1
-            continue
-
         row_driver, row_vehicle = _resolve_driver_vehicle(t, lookups, driver_id, vehicle_id)
         if not row_driver or not row_vehicle:
             unmatched += 1
             continue
 
         model_data = {k: v for k, v in t.items() if k in TRIP_FIELDS}
-        trip = Trip(driver_id=row_driver, vehicle_id=row_vehicle, raw_data=t.get("raw_data"), **model_data)
-        session.add(trip)
-        session.flush()
-        new_trip_ids.append(trip.id)
-        created += 1
+        existing = session.query(Trip).filter_by(external_id=t["external_id"], source=t["source"]).first()
+        if existing:
+            for key, val in model_data.items():
+                setattr(existing, key, val)
+            existing.driver_id = row_driver
+            existing.vehicle_id = row_vehicle
+            existing.raw_data = t.get("raw_data")
+            updated += 1
+        else:
+            trip = Trip(driver_id=row_driver, vehicle_id=row_vehicle, raw_data=t.get("raw_data"), **model_data)
+            session.add(trip)
+            session.flush()
+            new_trip_ids.append(trip.id)
+            created += 1
 
     session.commit()
 
@@ -204,7 +208,7 @@ async def process_upload(
     from src.services.incident_detector import create_incident_validations
     incidents = create_incident_validations(session, new_trip_ids)
 
-    msg = f"Importados: {created} registros. Duplicados omitidos: {skipped}."
+    msg = f"Importados: {created} nuevos, {updated} actualizados."
     if unmatched:
         msg += f" Sin asignar (conductor/vehiculo no encontrado): {unmatched}."
     if incidents:
@@ -251,7 +255,7 @@ async def _process_fuel(request, user, platform, driver_id, vehicle_id, csv_file
     lookups = _build_lookups(session)
     source_file = csv_file.filename or f"{platform}_upload"
     created = 0
-    skipped = 0
+    updated = 0
     unmatched = 0
 
     for rec in records:
@@ -277,7 +281,7 @@ async def _process_fuel(request, user, platform, driver_id, vehicle_id, csv_file
             unmatched += 1
             continue
 
-        # Deduplicate by date + vehicle + amount + provider
+        # Upsert by date + vehicle + amount + provider
         existing = session.query(FuelExpense).filter_by(
             date=rec["date"],
             vehicle_id=rec_vehicle,
@@ -285,25 +289,28 @@ async def _process_fuel(request, user, platform, driver_id, vehicle_id, csv_file
             provider=rec["provider"],
         ).first()
         if existing:
-            skipped += 1
-            continue
-
-        expense = FuelExpense(
-            date=rec["date"],
-            vehicle_id=rec_vehicle,
-            driver_id=rec_driver,
-            liters=rec["liters"],
-            amount=rec["amount"],
-            provider=rec["provider"],
-            source_file=source_file,
-            payment_method=rec.get("payment_method", "tarjeta"),
-        )
-        session.add(expense)
-        created += 1
+            existing.driver_id = rec_driver
+            existing.liters = rec["liters"]
+            existing.source_file = source_file
+            existing.payment_method = rec.get("payment_method", "tarjeta")
+            updated += 1
+        else:
+            expense = FuelExpense(
+                date=rec["date"],
+                vehicle_id=rec_vehicle,
+                driver_id=rec_driver,
+                liters=rec["liters"],
+                amount=rec["amount"],
+                provider=rec["provider"],
+                source_file=source_file,
+                payment_method=rec.get("payment_method", "tarjeta"),
+            )
+            session.add(expense)
+            created += 1
 
     session.commit()
 
-    msg = f"Gastos combustible importados: {created}. Duplicados: {skipped}."
+    msg = f"Gastos combustible importados: {created} nuevos, {updated} actualizados."
     if unmatched:
         msg += f" Sin vehiculo asignado: {unmatched}."
     return await _render_result(request, session, user, success=msg)
@@ -331,7 +338,7 @@ async def _process_uber(request, user, csv_file, session):
     lookups = _build_lookups(session)
     source_file = csv_file.filename or "uber_upload"
     created = 0
-    skipped = 0
+    updated = 0
     unmatched = 0
 
     for rec in records:
@@ -342,36 +349,43 @@ async def _process_uber(request, user, csv_file, session):
         if not vehicle_id:
             vehicle_id = lookups["license_to_vehicle"].get(lic_key)
 
-        # Deduplicate by date + license_number
+        # Upsert by date + license_number
         existing = session.query(UberDailySummary).filter_by(
             date=rec["date"],
             license_number=rec["license_number"],
         ).first()
         if existing:
-            skipped += 1
-            continue
-
-        summary = UberDailySummary(
-            date=rec["date"],
-            license_number=rec["license_number"],
-            vehicle_id=vehicle_id,
-            total_earnings=rec["total_earnings"],
-            taximeter=rec["taximeter"],
-            refund=rec["refund"],
-            adjustments=rec["adjustments"],
-            t3_fixed=rec["t3_fixed"],
-            total_payment=rec["total_payment"],
-            source_file=source_file,
-        )
-        session.add(summary)
-        created += 1
+            existing.vehicle_id = vehicle_id
+            existing.total_earnings = rec["total_earnings"]
+            existing.taximeter = rec["taximeter"]
+            existing.refund = rec["refund"]
+            existing.adjustments = rec["adjustments"]
+            existing.t3_fixed = rec["t3_fixed"]
+            existing.total_payment = rec["total_payment"]
+            existing.source_file = source_file
+            updated += 1
+        else:
+            summary = UberDailySummary(
+                date=rec["date"],
+                license_number=rec["license_number"],
+                vehicle_id=vehicle_id,
+                total_earnings=rec["total_earnings"],
+                taximeter=rec["taximeter"],
+                refund=rec["refund"],
+                adjustments=rec["adjustments"],
+                t3_fixed=rec["t3_fixed"],
+                total_payment=rec["total_payment"],
+                source_file=source_file,
+            )
+            session.add(summary)
+            created += 1
 
         if not vehicle_id:
             unmatched += 1
 
     session.commit()
 
-    msg = f"Resumen diario Uber importado: {created} registros. Duplicados: {skipped}."
+    msg = f"Resumen diario Uber importado: {created} nuevos, {updated} actualizados."
     if unmatched:
         msg += f" Sin vehiculo asignado: {unmatched}."
     return await _render_result(request, session, user, success=msg)
@@ -399,7 +413,7 @@ async def _process_lacaixa(request, user, vehicle_id, csv_file, session):
     lookups = _build_lookups(session)
     source_file = csv_file.filename or "lacaixa_upload"
     created = 0
-    skipped = 0
+    updated = 0
     unmatched = 0
 
     for rec in records:
@@ -416,28 +430,30 @@ async def _process_lacaixa(request, user, vehicle_id, csv_file, session):
             unmatched += 1
             continue
 
-        # Deduplicate by date + license_number
+        # Upsert by date + license_number
         existing = session.query(TpvDailyTotal).filter_by(
             date=rec["date"],
             license_number=rec["license_number"],
         ).first()
         if existing:
-            skipped += 1
-            continue
-
-        total = TpvDailyTotal(
-            date=rec["date"],
-            vehicle_id=rec_vehicle,
-            license_number=rec["license_number"],
-            amount=rec["amount"],
-            source_file=source_file,
-        )
-        session.add(total)
-        created += 1
+            existing.vehicle_id = rec_vehicle
+            existing.amount = rec["amount"]
+            existing.source_file = source_file
+            updated += 1
+        else:
+            total = TpvDailyTotal(
+                date=rec["date"],
+                vehicle_id=rec_vehicle,
+                license_number=rec["license_number"],
+                amount=rec["amount"],
+                source_file=source_file,
+            )
+            session.add(total)
+            created += 1
 
     session.commit()
 
-    msg = f"Totales TPV importados: {created} registros. Duplicados: {skipped}."
+    msg = f"Totales TPV importados: {created} nuevos, {updated} actualizados."
     if unmatched:
         msg += f" Sin vehiculo asignado: {unmatched}."
     return await _render_result(request, session, user, success=msg)
