@@ -12,9 +12,10 @@ services:
       - taxi_pg_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U taxi"]
-      interval: 10s
+      interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 10
+      start_period: 30s
 
   taxi-redis:
     image: redis:7-alpine
@@ -24,9 +25,10 @@ services:
       - taxi_redis_data:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
+      interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 10
+      start_period: 10s
 
   taxi-api:
     image: ghcr.io/ivantintore/taxi-api:latest
@@ -71,14 +73,14 @@ services:
 
 networks:
   dashboard_backend:
-    external:
-      name: dashboard_backend
+    name: dashboard_backend
+    external: true
 
 volumes:
   taxi_pg_data:
-    external:
-      name: taxi-api_taxi_pg_data
+    name: taxi-api_taxi_pg_data
+    external: true
   taxi_redis_data:
   taxi_imports:
-    external:
-      name: taxi-api_taxi_imports
+    name: taxi-api_taxi_imports
+    external: true
