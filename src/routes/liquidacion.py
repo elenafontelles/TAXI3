@@ -295,7 +295,14 @@ async def liquidacion_debug(
     """Temporary debug endpoint — remove after investigation."""
     from fastapi.responses import JSONResponse
 
+    from fastapi import Query
     target_date = date(2025, 12, 23)
+
+    # Also find a FreeNow trip WITH raw_data for column comparison
+    fn_with_raw = session.query(Trip).filter(
+        Trip.source == "freenow", Trip.raw_data.isnot(None),
+        Trip.driver_id == "3c7e7d78-143b-470f-9e36-e590e4dbbe92",
+    ).order_by(Trip.started_at.desc()).first()
 
     # Find Tamara
     drivers = session.query(Driver).filter_by(is_active=True).all()
@@ -373,11 +380,15 @@ async def liquidacion_debug(
                                "payment": t.payment_method, "tips": str(t.tips),
                                "tolls": str(t.tolls), "commission": str(t.commission),
                                "payout": str(t.payout_amount),
-                               "raw_bruto": (t.raw_data or {}).get("BRUTO"),
-                               "raw_neto": (t.raw_data or {}).get("NETO"),
-                               "raw_tips": (t.raw_data or {}).get("TIPS")}
+                               "external_id": t.external_id}
                               for t in fn_fixed],
         },
+        "fn_sample_with_raw": {
+            "amount": str(fn_with_raw.gross_amount) if fn_with_raw else None,
+            "tips": str(fn_with_raw.tips) if fn_with_raw else None,
+            "raw_data": fn_with_raw.raw_data if fn_with_raw else None,
+            "started_at": str(fn_with_raw.started_at) if fn_with_raw else None,
+        } if fn_with_raw else None,
     })
 
 
