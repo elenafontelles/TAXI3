@@ -34,26 +34,48 @@ def _extract_license_number(driver: Driver) -> str | None:
     return lic
 
 
+def _normalize_plate(plate: str) -> str:
+    """Strip spaces, dashes, dots for plate comparison."""
+    import re
+    return re.sub(r"[\s\-\.]", "", plate).upper()
+
+
 def _resolve_vehicle(session: Session, driver: Driver) -> Vehicle | None:
-    """Resolve vehicle from driver's license_number."""
+    """Resolve vehicle from driver's license_number.
+
+    Tries multiple strategies:
+    1. Match Vehicle.license_number by taxi license (e.g. "361")
+    2. Match Vehicle.plate by plate embedded in driver.license_number (e.g. "0397MSS")
+    """
+    lic = driver.license_number.strip()
     lic_num = _extract_license_number(driver)
-    if not lic_num:
-        return None
 
-    # Try exact match first, then with leading zeros stripped
-    vehicle = session.query(Vehicle).filter(
-        Vehicle.license_number == lic_num,
-        Vehicle.is_active == True,
-    ).first()
+    # Strategy 1: match by license number
+    if lic_num:
+        vehicle = session.query(Vehicle).filter(
+            Vehicle.license_number == lic_num,
+            Vehicle.is_active == True,
+        ).first()
+        if vehicle:
+            return vehicle
 
-    if not vehicle:
-        # Try stripping leading zeros on both sides
+        # Try with leading zeros stripped
         vehicles = session.query(Vehicle).filter_by(is_active=True).all()
         for v in vehicles:
             if v.license_number.strip().lstrip("0") == lic_num.lstrip("0"):
                 return v
 
-    return vehicle
+    # Strategy 2: match by plate from "361 - 0397MSS" format
+    if " - " in lic:
+        plate_part = lic.split(" - ")[1].strip()
+        if plate_part:
+            norm_plate = _normalize_plate(plate_part)
+            vehicles = session.query(Vehicle).filter_by(is_active=True).all()
+            for v in vehicles:
+                if _normalize_plate(v.plate) == norm_plate:
+                    return v
+
+    return None
 
 
 def _get_daily_data(session: Session, driver_id: str, vehicle: Vehicle | None,
@@ -372,6 +394,14 @@ async def liquidacion_debug(
         Trip.source == "prima",
     ).group_by(Trip.driver_id).all()
 
+    # Check FreeNow raw_data for FARE TYPE field
+    freenow_raw_sample = session.query(Trip.raw_data).filter(
+        Trip.driver_id == driver_id,
+        Trip.source == "freenow",
+        Trip.raw_data.isnot(None),
+    ).first()
+    freenow_raw_keys = list(freenow_raw_sample[0].keys()) if freenow_raw_sample and freenow_raw_sample[0] else []
+
     # Check prima trips by vehicle_id (to see if trips exist for the FreeNow vehicle)
     freenow_vehicle_id = None
     freenow_sample = session.query(Trip).filter(
@@ -419,6 +449,7 @@ async def liquidacion_debug(
         ],
         "sample_trips": sample_trips,
         "all_prima_in_range_by_driver_id": {did: cnt for did, cnt in all_prima_in_range},
+        "freenow_raw_data_keys": freenow_raw_keys,
         "freenow_vehicle_id": freenow_vehicle_id,
         "prima_trips_by_freenow_vehicle": prima_by_freenow_vehicle,
         "tpv_records": [
