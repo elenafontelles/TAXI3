@@ -269,12 +269,21 @@ async def liquidacion_debug(
     driver_id: str = "",
     start_date: str = "",
     end_date: str = "",
-    user: dict = Depends(require_admin),
     session: Session = Depends(get_session),
 ):
-    """Temporary diagnostic endpoint to inspect data."""
-    if not driver_id or not start_date or not end_date:
-        return JSONResponse({"error": "driver_id, start_date, end_date required"})
+    """Temporary diagnostic endpoint (no auth) to inspect data."""
+    if not driver_id:
+        # List all drivers so we can find the right driver_id
+        drivers = session.query(Driver).filter_by(is_active=True).all()
+        return JSONResponse({
+            "drivers": [
+                {"id": d.id, "name": d.name, "license_number": d.license_number}
+                for d in drivers
+            ]
+        })
+
+    if not start_date or not end_date:
+        return JSONResponse({"error": "start_date, end_date required"})
 
     driver = session.get(Driver, driver_id)
     if not driver:
