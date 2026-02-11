@@ -70,6 +70,7 @@ jobs:
           script: |
             echo '${{ secrets.GITHUB_TOKEN }}' | sudo docker login ghcr.io -u ${{ github.actor }} --password-stdin
             cd ${{ secrets.DEPLOY_PATH }}/repo
+            sudo git checkout -- .
             sudo git pull origin main
             sudo docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
             # Clean up all project containers (including stale ones from v1)
