@@ -372,6 +372,24 @@ async def liquidacion_debug(
         Trip.source == "prima",
     ).group_by(Trip.driver_id).all()
 
+    # Check prima trips by vehicle_id (to see if trips exist for the FreeNow vehicle)
+    freenow_vehicle_id = None
+    freenow_sample = session.query(Trip).filter(
+        Trip.driver_id == driver_id,
+        Trip.source == "freenow",
+    ).first()
+    if freenow_sample:
+        freenow_vehicle_id = freenow_sample.vehicle_id
+
+    prima_by_freenow_vehicle = 0
+    if freenow_vehicle_id:
+        prima_by_freenow_vehicle = session.query(func.count(Trip.id)).filter(
+            func.date(Trip.started_at) >= sd,
+            func.date(Trip.started_at) <= ed,
+            Trip.source == "prima",
+            Trip.vehicle_id == freenow_vehicle_id,
+        ).scalar() or 0
+
     # TpvDailyTotal for this license
     tpv_records = session.query(TpvDailyTotal).filter(
         TpvDailyTotal.date >= sd,
@@ -401,6 +419,8 @@ async def liquidacion_debug(
         ],
         "sample_trips": sample_trips,
         "all_prima_in_range_by_driver_id": {did: cnt for did, cnt in all_prima_in_range},
+        "freenow_vehicle_id": freenow_vehicle_id,
+        "prima_trips_by_freenow_vehicle": prima_by_freenow_vehicle,
         "tpv_records": [
             {"date": str(r.date), "license_number": r.license_number, "amount": str(r.amount)}
             for r in tpv_records
