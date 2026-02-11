@@ -90,18 +90,23 @@ def _get_daily_data(session: Session, driver_id: str, vehicle: Vehicle | None,
         and (t.duration_minutes is not None and float(t.duration_minutes) < 0.5)
     )
 
-    # FreeNow FIXED bruto (adds to recaudacion)
+    # FreeNow bruto that adds to recaudacion:
+    # FIXED fare or NULL fare_type (old records before fare_type was added)
+    # Excludes METERED which goes through taximeter (prima)
     freenow_fixed_bruto = sum(
         Decimal(str(t.gross_amount or 0))
         for t in day_trips
-        if t.source == "freenow" and t.fare_type == "FIXED"
+        if t.source == "freenow" and t.fare_type != "METERED"
     )
 
-    # FreeNow APP-paid FIXED bruto
+    # FreeNow APP-paid bruto (paid via app, not cash)
+    # Handles both new format ("APP") and old format ("tarjeta")
     freenow_app_paid_bruto = sum(
         Decimal(str(t.gross_amount or 0))
         for t in day_trips
-        if t.source == "freenow" and t.fare_type == "FIXED" and t.payment_method == "APP"
+        if t.source == "freenow"
+        and t.fare_type != "METERED"
+        and t.payment_method in ("APP", "tarjeta")
     )
 
     # Uber: query UberDailySummary by license_number (primary) or vehicle_id (fallback)
