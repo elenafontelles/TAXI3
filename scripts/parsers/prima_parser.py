@@ -11,6 +11,21 @@ def _parse_decimal(value: str) -> float:
     return float(value.replace(",", "."))
 
 
+def _parse_time_to_minutes(value: str) -> float:
+    """Parse HH:MM:SS time string to minutes.
+
+    Examples: '0:00:18' → 0.3, '0:12:30' → 12.5, '1:05:00' → 65.0
+    """
+    value = value.strip()
+    if not value:
+        return 0.0
+    parts = value.split(":")
+    if len(parts) == 3:
+        h, m, s = int(parts[0]), int(parts[1]), int(parts[2])
+        return round((h * 3600 + m * 60 + s) / 60, 2)
+    return 0.0
+
+
 def _parse_coord(value: str) -> float | None:
     """Parse coordinate like '41.213100N' or '2.056400E'."""
     value = value.strip()
@@ -64,14 +79,18 @@ def parse_prima_csv(filepath: str) -> list[dict]:
             started_at = _parse_datetime(row["DateTripStart"])
             ended_at = _parse_datetime(row["DateTripEnd"])
 
-            duration = (ended_at - started_at).total_seconds() / 60
+            # Use "Time" column (HH:MM:SS) if available, else calculate from dates
+            if row.get("Time", "").strip():
+                duration = _parse_time_to_minutes(row["Time"])
+            else:
+                duration = round((ended_at - started_at).total_seconds() / 60, 2)
 
             trips.append({
                 "source": "prima",
                 "external_id": row["TripNumber"].strip(),
                 "started_at": started_at,
                 "ended_at": ended_at,
-                "duration_minutes": round(duration, 2),
+                "duration_minutes": duration,
                 "gross_amount": gross,
                 "commission": 0,
                 "tips": _parse_decimal(row["AmountTips"]),

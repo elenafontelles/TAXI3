@@ -33,3 +33,11 @@ def test_prima_missing_coords():
     trips = parse_prima_csv("tests/fixtures/prima_sample.csv")
     assert trips[2]["origin_lat"] is None
     assert trips[2]["origin_lng"] is None
+
+
+def test_prima_time_column():
+    """Time column (HH:MM:SS) should be used for duration_minutes."""
+    trips = parse_prima_csv("tests/fixtures/prima_sample.csv")
+    assert trips[0]["duration_minutes"] == 12.0   # 0:12:00
+    assert trips[1]["duration_minutes"] == 18.0   # 0:18:00
+    assert trips[2]["duration_minutes"] == 8.0    # 0:08:00
