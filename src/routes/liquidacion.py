@@ -337,6 +337,17 @@ async def liquidacion_debug(
         Trip.source == "prima", Trip.vehicle_id == vehicle_id
     ).count() if vehicle_id else 0
 
+    # Check prima date range
+    from sqlalchemy import func as sqlfunc
+    prima_date_range = session.query(
+        sqlfunc.min(Trip.started_at), sqlfunc.max(Trip.started_at)
+    ).filter(Trip.source == "prima", Trip.driver_id == tamara.id).first()
+
+    # Sample prima trips to see their dates
+    sample_prima = session.query(Trip).filter(
+        Trip.source == "prima", Trip.driver_id == tamara.id
+    ).order_by(Trip.started_at.desc()).limit(5).all()
+
     return JSONResponse({
         "driver": {"id": tamara.id, "name": tamara.name, "license": tamara.license_number},
         "vehicle": {"id": vehicle_id, "plate": vehicle.plate if vehicle else None,
@@ -347,23 +358,24 @@ async def liquidacion_debug(
         "prima": {
             "count_on_date": len(prima_trips),
             "sum": str(sum(float(t.gross_amount or 0) for t in prima_trips)),
-            "details": [{"id": t.id, "amount": str(t.gross_amount), "driver_id": t.driver_id,
-                         "vehicle_id": t.vehicle_id} for t in prima_trips[:5]],
             "total_prima_trips_in_db": all_prima,
             "prima_by_driver_id": prima_by_driver,
             "prima_by_vehicle_id": prima_by_vehicle,
+            "date_range": [str(prima_date_range[0]) if prima_date_range[0] else None,
+                           str(prima_date_range[1]) if prima_date_range[1] else None],
+            "recent_prima_dates": [str(t.started_at) for t in sample_prima],
         },
         "freenow": {
             "total_on_date": len(fn_trips),
             "fixed_count": len(fn_fixed),
-            "metered_count": len(fn_metered),
-            "null_fare_type_count": len(fn_null),
             "fixed_sum": str(sum(float(t.gross_amount or 0) for t in fn_fixed)),
-            "null_details": [{"id": t.id, "amount": str(t.gross_amount),
-                              "fare_type": t.fare_type, "raw_fare_type": (t.raw_data or {}).get("FARE TYPE")}
-                             for t in fn_null],
             "fixed_details": [{"amount": str(t.gross_amount), "fare_type": t.fare_type,
-                               "payment": t.payment_method}
+                               "payment": t.payment_method, "tips": str(t.tips),
+                               "tolls": str(t.tolls), "commission": str(t.commission),
+                               "payout": str(t.payout_amount),
+                               "raw_bruto": (t.raw_data or {}).get("BRUTO"),
+                               "raw_neto": (t.raw_data or {}).get("NETO"),
+                               "raw_tips": (t.raw_data or {}).get("TIPS")}
                               for t in fn_fixed],
         },
     })
