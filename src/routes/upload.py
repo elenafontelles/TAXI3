@@ -78,12 +78,26 @@ def _build_lookups(session: Session) -> dict:
         lic = v.license_number.strip().lstrip("0")
         license_num_to_vehicle[lic] = v.id
 
+    # Driver ID to vehicle: resolve each driver's vehicle via license_number
+    driver_id_to_vehicle = {}
+    for d in drivers:
+        lic = d.license_number.strip()
+        if " - " in lic:
+            lic_num = lic.split(" - ")[0].strip().lstrip("0")
+            # Try from license_to_vehicle first (plate match)
+            if lic_num in license_to_vehicle:
+                driver_id_to_vehicle[d.id] = license_to_vehicle[lic_num]
+            # Then try from vehicles table by license_number
+            elif lic_num in license_num_to_vehicle:
+                driver_id_to_vehicle[d.id] = license_num_to_vehicle[lic_num]
+
     return {
         "driver_names": driver_names,
         "plate_to_vehicle": plate_to_vehicle,
         "license_to_driver": license_to_driver,
         "license_to_vehicle": license_to_vehicle,
         "license_num_to_vehicle": license_num_to_vehicle,
+        "driver_id_to_vehicle": driver_id_to_vehicle,
     }
 
 
@@ -112,8 +126,12 @@ def _resolve_driver_vehicle(record: dict, lookups: dict, fallback_driver: str, f
         if not vehicle_id:
             vehicle_id = lookups["license_to_vehicle"].get(lic_key)
 
-    # Fallback to form selection
-    return driver_id or fallback_driver, vehicle_id or fallback_vehicle
+    # Fallback: if driver found but vehicle not, resolve via driver's license
+    resolved_driver = driver_id or fallback_driver
+    if not vehicle_id and resolved_driver:
+        vehicle_id = lookups["driver_id_to_vehicle"].get(resolved_driver)
+
+    return resolved_driver, vehicle_id or fallback_vehicle
 
 
 @router.get("/upload", response_class=HTMLResponse)
