@@ -2,7 +2,7 @@
 from datetime import date, timedelta
 from decimal import Decimal
 from fastapi import APIRouter, Request, Depends, Form
-from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_
 from src.routes.auth import require_admin
@@ -261,6 +261,137 @@ async def liquidacion_page(
             "totals": totals,
         },
     )
+
+
+@router.get("/liquidacion/debug", response_class=JSONResponse)
+async def liquidacion_debug(
+    request: Request,
+    driver_id: str = "",
+    start_date: str = "",
+    end_date: str = "",
+    user: dict = Depends(require_admin),
+    session: Session = Depends(get_session),
+):
+    """Temporary diagnostic endpoint to inspect data."""
+    if not driver_id or not start_date or not end_date:
+        return JSONResponse({"error": "driver_id, start_date, end_date required"})
+
+    driver = session.get(Driver, driver_id)
+    if not driver:
+        return JSONResponse({"error": f"Driver {driver_id} not found"})
+
+    sd = date.fromisoformat(start_date)
+    ed = date.fromisoformat(end_date)
+
+    license_number = _extract_license_number(driver)
+    vehicle = _resolve_vehicle(session, driver)
+    vehicle_id = vehicle.id if vehicle else None
+
+    # Count all trips for this driver
+    total_trips_driver = session.query(func.count(Trip.id)).filter(
+        Trip.driver_id == driver_id,
+    ).scalar()
+
+    # Count all trips for this vehicle
+    total_trips_vehicle = session.query(func.count(Trip.id)).filter(
+        Trip.vehicle_id == vehicle_id,
+    ).scalar() if vehicle_id else 0
+
+    # Count trips in date range by source (using driver_id)
+    trips_in_range_by_driver = session.query(
+        Trip.source, func.count(Trip.id)
+    ).filter(
+        func.date(Trip.started_at) >= sd,
+        func.date(Trip.started_at) <= ed,
+        Trip.driver_id == driver_id,
+    ).group_by(Trip.source).all()
+
+    # Count trips in date range by source (using vehicle_id)
+    trips_in_range_by_vehicle = []
+    if vehicle_id:
+        trips_in_range_by_vehicle = session.query(
+            Trip.source, func.count(Trip.id)
+        ).filter(
+            func.date(Trip.started_at) >= sd,
+            func.date(Trip.started_at) <= ed,
+            Trip.vehicle_id == vehicle_id,
+        ).group_by(Trip.source).all()
+
+    # Sample FreeNow trips: fare_type and payment_method distribution
+    freenow_dist = session.query(
+        Trip.fare_type, Trip.payment_method, func.count(Trip.id)
+    ).filter(
+        func.date(Trip.started_at) >= sd,
+        func.date(Trip.started_at) <= ed,
+        Trip.source == "freenow",
+        (Trip.driver_id == driver_id) | (Trip.vehicle_id == vehicle_id) if vehicle_id else Trip.driver_id == driver_id,
+    ).group_by(Trip.fare_type, Trip.payment_method).all()
+
+    # Sample first 3 trips for each source
+    sample_trips = {}
+    for src in ("prima", "freenow"):
+        trips = session.query(Trip).filter(
+            func.date(Trip.started_at) >= sd,
+            func.date(Trip.started_at) <= ed,
+            Trip.source == src,
+            (Trip.driver_id == driver_id) | (Trip.vehicle_id == vehicle_id) if vehicle_id else Trip.driver_id == driver_id,
+        ).limit(3).all()
+        sample_trips[src] = [
+            {
+                "id": t.id,
+                "driver_id": t.driver_id,
+                "vehicle_id": t.vehicle_id,
+                "started_at": str(t.started_at),
+                "gross_amount": str(t.gross_amount),
+                "fare_type": t.fare_type,
+                "payment_method": t.payment_method,
+            }
+            for t in trips
+        ]
+
+    # Check if any prima trips exist at ALL for any driver in this range
+    all_prima_in_range = session.query(
+        Trip.driver_id, func.count(Trip.id)
+    ).filter(
+        func.date(Trip.started_at) >= sd,
+        func.date(Trip.started_at) <= ed,
+        Trip.source == "prima",
+    ).group_by(Trip.driver_id).all()
+
+    # TpvDailyTotal for this license
+    tpv_records = session.query(TpvDailyTotal).filter(
+        TpvDailyTotal.date >= sd,
+        TpvDailyTotal.date <= ed,
+        TpvDailyTotal.license_number == license_number,
+    ).all()
+
+    return JSONResponse({
+        "driver": {
+            "id": driver.id,
+            "name": driver.name,
+            "license_number": driver.license_number,
+            "extracted_license": license_number,
+        },
+        "vehicle": {
+            "id": vehicle.id if vehicle else None,
+            "license_number": vehicle.license_number if vehicle else None,
+            "plate": vehicle.plate if vehicle else None,
+        },
+        "total_trips_for_driver_all_time": total_trips_driver,
+        "total_trips_for_vehicle_all_time": total_trips_vehicle,
+        "trips_in_range_by_driver": {src: cnt for src, cnt in trips_in_range_by_driver},
+        "trips_in_range_by_vehicle": {src: cnt for src, cnt in trips_in_range_by_vehicle},
+        "freenow_distribution": [
+            {"fare_type": ft, "payment_method": pm, "count": cnt}
+            for ft, pm, cnt in freenow_dist
+        ],
+        "sample_trips": sample_trips,
+        "all_prima_in_range_by_driver_id": {did: cnt for did, cnt in all_prima_in_range},
+        "tpv_records": [
+            {"date": str(r.date), "license_number": r.license_number, "amount": str(r.amount)}
+            for r in tpv_records
+        ],
+    })
 
 
 @router.post("/liquidacion/export", response_class=StreamingResponse)
