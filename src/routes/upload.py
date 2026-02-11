@@ -79,18 +79,17 @@ def _build_lookups(session: Session) -> dict:
         lic = v.license_number.strip().lstrip("0")
         license_num_to_vehicle[lic] = v.id
 
-    # Driver ID to vehicle: resolve each driver's vehicle via license_number
+    # Driver ID <-> Vehicle ID bidirectional mapping
     driver_id_to_vehicle = {}
+    vehicle_id_to_driver = {}
     for d in drivers:
         lic = d.license_number.strip()
         if " - " in lic:
             lic_num = lic.split(" - ")[0].strip().lstrip("0")
-            # Try from license_to_vehicle first (plate match)
-            if lic_num in license_to_vehicle:
-                driver_id_to_vehicle[d.id] = license_to_vehicle[lic_num]
-            # Then try from vehicles table by license_number
-            elif lic_num in license_num_to_vehicle:
-                driver_id_to_vehicle[d.id] = license_num_to_vehicle[lic_num]
+            vid = license_to_vehicle.get(lic_num) or license_num_to_vehicle.get(lic_num)
+            if vid:
+                driver_id_to_vehicle[d.id] = vid
+                vehicle_id_to_driver[vid] = d.id
 
     return {
         "driver_names": driver_names,
@@ -99,6 +98,7 @@ def _build_lookups(session: Session) -> dict:
         "license_to_vehicle": license_to_vehicle,
         "license_num_to_vehicle": license_num_to_vehicle,
         "driver_id_to_vehicle": driver_id_to_vehicle,
+        "vehicle_id_to_driver": vehicle_id_to_driver,
     }
 
 
@@ -128,11 +128,14 @@ def _resolve_driver_vehicle(record: dict, lookups: dict, fallback_driver: str, f
             vehicle_id = lookups["license_to_vehicle"].get(lic_key)
 
     # Fallback: if driver found but vehicle not, resolve via driver's license
-    resolved_driver = driver_id or fallback_driver
-    if not vehicle_id and resolved_driver:
-        vehicle_id = lookups["driver_id_to_vehicle"].get(resolved_driver)
+    if not vehicle_id and driver_id:
+        vehicle_id = lookups["driver_id_to_vehicle"].get(driver_id)
 
-    return resolved_driver, vehicle_id or fallback_vehicle
+    # Fallback: if vehicle found but driver not, resolve via vehicle's driver
+    if not driver_id and vehicle_id:
+        driver_id = lookups["vehicle_id_to_driver"].get(vehicle_id)
+
+    return driver_id or fallback_driver, vehicle_id or fallback_vehicle
 
 
 @router.get("/upload", response_class=HTMLResponse)
