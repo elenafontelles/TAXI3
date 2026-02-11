@@ -58,6 +58,7 @@ def _build_lookups(session: Session) -> dict:
 
     # Prima: match driver by license number prefix
     # Driver license_number format: "092 - 8921LYW" -> extract "092"
+    # Mappings: 361-0397MSS, 092-8921LYW, 1061-2965MMM
     license_to_driver = {}
     license_to_vehicle = {}
     for d in drivers:

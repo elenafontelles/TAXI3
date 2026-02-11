@@ -25,7 +25,7 @@ router = APIRouter()
 def _extract_license_number(driver: Driver) -> str | None:
     """Extract numeric license from driver's license_number field.
 
-    Driver license_number format: "361 - 8921LYW" or "092 - 1234ABC"
+    Driver license_number format: "361 - 0397MSS" or "092 - 8921LYW"
     Returns: "361", "092", etc.
     """
     lic = driver.license_number.strip()
