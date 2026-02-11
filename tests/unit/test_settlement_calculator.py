@@ -8,8 +8,10 @@ from src.services.settlement_calculator import (
 def test_calculate_freenow_net():
     bruto = Decimal("70.20")
     net = calculate_freenow_net(bruto)
-    # 70.20 - (70.20 / 1.10 * 0.125 * 1.21) = 70.20 - 9.6525 = 60.55
-    assert net == Decimal("60.55")
+    # commission = 70.20 - (70.20 / 1.125) = 7.80
+    # commission + IVA = 7.80 * 1.21 = 9.438
+    # net = 70.20 - 9.438 = 60.76
+    assert net == Decimal("60.76")
 
 
 def test_calculate_freenow_net_zero():
@@ -158,8 +160,9 @@ def test_calculate_daily_settlement_freenow_net_when_commission_shared():
         other_expenses_total=Decimal("0.00"),
         driver_config=_default_config(freenow_commission_driver_pct=Decimal("100.0")),
     )
-    # freenow_app should use calculate_freenow_net: 50 - (50/1.10*0.125*1.21) = 50 - 6.875 = 43.13
-    assert result["freenow_app"] == Decimal("43.13")
+    # freenow_app = calculate_freenow_net(50)
+    # commission = 50 - (50/1.125) = 5.56; +IVA = 5.56*1.21 = 6.72; net = 50 - 6.72 = 43.28
+    assert result["freenow_app"] == Decimal("43.28")
 
 
 def test_calculate_daily_settlement_with_fuel_deducted():
