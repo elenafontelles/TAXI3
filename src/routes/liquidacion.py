@@ -113,8 +113,9 @@ def _get_daily_data(session: Session, driver_id: str, vehicle: Vehicle | None,
     )
 
     # FreeNow bruto that adds to recaudacion:
-    # FIXED fare or NULL fare_type (old records before fare_type was added)
-    # Excludes METERED which goes through taximeter (prima)
+    # Only FIXED fare trips (METERED goes through taximeter/prima)
+    # After migration 005, fare_type is backfilled from raw_data
+    # Still handle NULL fare_type (records without FARE TYPE in CSV)
     freenow_fixed_bruto = sum(
         Decimal(str(t.gross_amount or 0))
         for t in day_trips
@@ -122,7 +123,8 @@ def _get_daily_data(session: Session, driver_id: str, vehicle: Vehicle | None,
     )
 
     # FreeNow APP-paid bruto (paid via app, not cash)
-    # Handles both new format ("APP") and old format ("tarjeta")
+    # After migration 005, payment_method is normalized to "CASH"/"APP"
+    # Still handle old format ("tarjeta") for safety
     freenow_app_paid_bruto = sum(
         Decimal(str(t.gross_amount or 0))
         for t in day_trips
