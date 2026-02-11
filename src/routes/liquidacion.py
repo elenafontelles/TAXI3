@@ -288,6 +288,87 @@ async def liquidacion_page(
 
 
 
+@router.get("/liquidacion/debug")
+async def liquidacion_debug(
+    session: Session = Depends(get_session),
+):
+    """Temporary debug endpoint — remove after investigation."""
+    from fastapi.responses import JSONResponse
+
+    target_date = date(2025, 12, 23)
+
+    # Find Tamara
+    drivers = session.query(Driver).filter_by(is_active=True).all()
+    tamara = None
+    for d in drivers:
+        if "tamara" in d.name.lower():
+            tamara = d
+            break
+
+    if not tamara:
+        return JSONResponse({"error": "Tamara not found", "drivers": [d.name for d in drivers]})
+
+    license_number = _extract_license_number(tamara)
+    vehicle = _resolve_vehicle(session, tamara)
+    vehicle_id = vehicle.id if vehicle else None
+
+    # Get ALL trips for 23/12/2025 matching Tamara
+    trip_filters = [func.date(Trip.started_at) == target_date]
+    if tamara.id and vehicle_id:
+        trip_filters.append(
+            (Trip.driver_id == tamara.id) | (Trip.vehicle_id == vehicle_id)
+        )
+    day_trips = session.query(Trip).filter(*trip_filters).all()
+
+    # Prima trips
+    prima_trips = [t for t in day_trips if t.source == "prima"]
+    # FreeNow trips
+    fn_trips = [t for t in day_trips if t.source == "freenow"]
+    fn_fixed = [t for t in fn_trips if t.fare_type != "METERED"]
+    fn_metered = [t for t in fn_trips if t.fare_type == "METERED"]
+    fn_null = [t for t in fn_trips if t.fare_type is None]
+
+    # Also check: how many prima trips exist globally for license 361?
+    all_prima = session.query(Trip).filter(Trip.source == "prima").count()
+    prima_by_driver = session.query(Trip).filter(
+        Trip.source == "prima", Trip.driver_id == tamara.id
+    ).count()
+    prima_by_vehicle = session.query(Trip).filter(
+        Trip.source == "prima", Trip.vehicle_id == vehicle_id
+    ).count() if vehicle_id else 0
+
+    return JSONResponse({
+        "driver": {"id": tamara.id, "name": tamara.name, "license": tamara.license_number},
+        "vehicle": {"id": vehicle_id, "plate": vehicle.plate if vehicle else None,
+                     "license": vehicle.license_number if vehicle else None},
+        "license_number_extracted": license_number,
+        "target_date": str(target_date),
+        "total_trips_on_date": len(day_trips),
+        "prima": {
+            "count_on_date": len(prima_trips),
+            "sum": str(sum(float(t.gross_amount or 0) for t in prima_trips)),
+            "details": [{"id": t.id, "amount": str(t.gross_amount), "driver_id": t.driver_id,
+                         "vehicle_id": t.vehicle_id} for t in prima_trips[:5]],
+            "total_prima_trips_in_db": all_prima,
+            "prima_by_driver_id": prima_by_driver,
+            "prima_by_vehicle_id": prima_by_vehicle,
+        },
+        "freenow": {
+            "total_on_date": len(fn_trips),
+            "fixed_count": len(fn_fixed),
+            "metered_count": len(fn_metered),
+            "null_fare_type_count": len(fn_null),
+            "fixed_sum": str(sum(float(t.gross_amount or 0) for t in fn_fixed)),
+            "null_details": [{"id": t.id, "amount": str(t.gross_amount),
+                              "fare_type": t.fare_type, "raw_fare_type": (t.raw_data or {}).get("FARE TYPE")}
+                             for t in fn_null],
+            "fixed_details": [{"amount": str(t.gross_amount), "fare_type": t.fare_type,
+                               "payment": t.payment_method}
+                              for t in fn_fixed],
+        },
+    })
+
+
 @router.post("/liquidacion/export", response_class=StreamingResponse)
 async def export_liquidacion(
     request: Request,
