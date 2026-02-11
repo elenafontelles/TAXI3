@@ -3,19 +3,25 @@ from decimal import Decimal, ROUND_HALF_UP
 
 
 def calculate_freenow_net(bruto: Decimal) -> Decimal:
-    """Convert FreeNow bruto amount to net amount with VAT adjustment.
+    """Calculate net amount FreeNow pays to owner after commission.
 
-    Formula: bruto / 1.125 * 1.21
+    FreeNow charges 12.5% commission on the base fare (ex-IVA 10%),
+    plus 21% IVA on their commission fee.
+
+    net = bruto - (bruto / 1.10 * 0.125 * 1.21)
 
     Args:
-        bruto: FreeNow gross amount
+        bruto: FreeNow gross amount (what the passenger paid)
 
     Returns:
-        Net amount rounded to 2 decimal places
+        Net amount paid to owner, rounded to 2 decimal places
     """
     if bruto == 0:
         return Decimal("0.00")
-    result = bruto / Decimal("1.125") * Decimal("1.21")
+    base = bruto / Decimal("1.10")
+    commission = base * Decimal("0.125")
+    commission_with_vat = commission * Decimal("1.21")
+    result = bruto - commission_with_vat
     return result.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
