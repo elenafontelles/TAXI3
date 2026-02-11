@@ -273,13 +273,18 @@ async def liquidacion_debug(
 ):
     """Temporary diagnostic endpoint (no auth) to inspect data."""
     if not driver_id:
-        # List all drivers so we can find the right driver_id
+        # List all drivers and vehicles
         drivers = session.query(Driver).filter_by(is_active=True).all()
+        vehicles = session.query(Vehicle).filter_by(is_active=True).all()
         return JSONResponse({
             "drivers": [
                 {"id": d.id, "name": d.name, "license_number": d.license_number}
                 for d in drivers
-            ]
+            ],
+            "vehicles": [
+                {"id": v.id, "license_number": v.license_number, "plate": v.plate}
+                for v in vehicles
+            ],
         })
 
     if not start_date or not end_date:
