@@ -72,7 +72,7 @@ def export_settlement_to_pdf(
         row_data = [
             date_str,
             _fmt(r.get("prima_amount", 0)),
-            _fmt(r.get("freenow_fixed_bruto", 0)),
+            _fmt(r.get("freenow_fixed", 0)),
             _fmt(r.get("uber_t3_fixed", 0)),
             _fmt(r.get("recaudacion_total", 0)),
             _fmt(r.get("incidents_amount", 0)),
@@ -102,7 +102,7 @@ def export_settlement_to_pdf(
     total_data = [
         "TOTAL",
         _fmt(totals.get("prima_amount", 0)),
-        _fmt(totals.get("freenow_fixed_bruto", 0)),
+        _fmt(totals.get("freenow_fixed", 0)),
         _fmt(totals.get("uber_t3_fixed", 0)),
         _fmt(totals.get("recaudacion_total", 0)),
         _fmt(totals.get("incidents_amount", 0)),

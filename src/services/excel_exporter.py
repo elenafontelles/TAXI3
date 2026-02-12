@@ -48,7 +48,7 @@ def export_settlement_to_excel(
     for r in results:
         ws.cell(row=row, column=1, value=r["date"].strftime("%d/%m/%Y"))
         ws.cell(row=row, column=2, value=float(r.get("prima_amount", 0)))
-        ws.cell(row=row, column=3, value=float(r.get("freenow_fixed_bruto", 0)))
+        ws.cell(row=row, column=3, value=float(r.get("freenow_fixed", 0)))
         ws.cell(row=row, column=4, value=float(r.get("uber_t3_fixed", 0)))
         ws.cell(row=row, column=5, value=float(r.get("recaudacion_total", 0)))
         ws.cell(row=row, column=6, value=float(r.get("incidents_amount", 0)))
@@ -76,7 +76,7 @@ def export_settlement_to_excel(
     ws.cell(row=row, column=1, value="TOTAL").font = Font(bold=True)
 
     total_cols = {
-        2: "prima_amount", 3: "freenow_fixed_bruto", 4: "uber_t3_fixed",
+        2: "prima_amount", 3: "freenow_fixed", 4: "uber_t3_fixed",
         5: "recaudacion_total", 6: "incidents_amount", 7: "recaudacion_neta",
         8: "iva", 9: "base_imponible", 11: "parte_proporcional",
         12: "tpv_visa_total", 13: "freenow_app", 14: "uber_total_payment",

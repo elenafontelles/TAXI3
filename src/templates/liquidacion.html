@@ -127,7 +127,7 @@
                     <tr>
                         <td>{{ r.date.strftime('%d/%m/%Y') }}</td>
                         <td>{{ "%.2f"|format(r.prima_amount) }}</td>
-                        <td>{{ "%.2f"|format(r.freenow_fixed_bruto) }}</td>
+                        <td>{{ "%.2f"|format(r.freenow_fixed) }}</td>
                         <td>{{ "%.2f"|format(r.uber_t3_fixed) }}</td>
                         <td>{{ "%.2f"|format(r.recaudacion_total) }}</td>
                         <td>{{ "%.2f"|format(r.incidents_amount) }}</td>
@@ -152,7 +152,7 @@
                     <tr class="totals-row">
                         <td>TOTALES</td>
                         <td>{{ "%.2f"|format(totals.prima_amount) }}</td>
-                        <td>{{ "%.2f"|format(totals.freenow_fixed_bruto) }}</td>
+                        <td>{{ "%.2f"|format(totals.freenow_fixed) }}</td>
                         <td>{{ "%.2f"|format(totals.uber_t3_fixed) }}</td>
                         <td>{{ "%.2f"|format(totals.recaudacion_total) }}</td>
                         <td>{{ "%.2f"|format(totals.incidents_amount) }}</td>
