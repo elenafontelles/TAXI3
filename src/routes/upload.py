@@ -16,6 +16,7 @@ from src.models.trip import Trip
 from src.models.fuel_expense import FuelExpense
 from src.models.tpv_daily_total import TpvDailyTotal
 from src.models.uber_daily_summary import UberDailySummary
+from src.models.other_expense import OtherExpense
 from src.template_config import templates
 
 logger = logging.getLogger(__name__)
@@ -479,6 +480,40 @@ async def _process_lacaixa(request, user, vehicle_id, csv_file, session):
     if unmatched:
         msg += f" Sin vehiculo asignado: {unmatched}."
     return await _render_result(request, session, user, success=msg)
+
+
+@router.post("/upload/otros-gastos", response_class=HTMLResponse)
+async def add_other_expense(
+    request: Request,
+    user: dict = Depends(require_admin),
+    driver_id: str = Form(...),
+    fecha: str = Form(...),
+    importe: float = Form(...),
+    concepto: str = Form(...),
+    session: Session = Depends(get_session),
+):
+    """Add a manual other expense entry."""
+    from datetime import datetime
+    try:
+        expense_date = datetime.strptime(fecha.strip(), "%d/%m/%y").date()
+    except ValueError:
+        return await _render_result(request, session, user, error="Formato de fecha incorrecto. Usa DD/MM/YY")
+
+    from decimal import Decimal
+    expense = OtherExpense(
+        date=expense_date,
+        driver_id=driver_id,
+        amount=Decimal(str(importe)),
+        description=concepto.strip(),
+        category="otro",
+    )
+    session.add(expense)
+    session.commit()
+
+    return await _render_result(
+        request, session, user,
+        success=f"Gasto registrado: {fecha} - {importe:.2f} EUR - {concepto}",
+    )
 
 
 async def _render_result(request, session, user, success=None, error=None):

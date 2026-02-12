@@ -72,6 +72,46 @@
         </form>
     </div>
 </div>
+
+<div class="card mt-4">
+    <div class="card-header">Entrada manual: Otros gastos</div>
+    <div class="card-body">
+        <form method="post" action="{{ root_path }}/upload/otros-gastos">
+            <div class="row mb-3">
+                <div class="col-md-3">
+                    <label for="otros_driver_id" class="form-label">Conductor</label>
+                    <select class="form-select" id="otros_driver_id" name="driver_id" required>
+                        <option value="">Seleccionar conductor...</option>
+                        {% for d in drivers %}
+                        <option value="{{ d.id }}">{{ d.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label for="otros_fecha" class="form-label">Fecha</label>
+                    <input type="text" class="form-control" id="otros_fecha" name="fecha"
+                           placeholder="DD/MM/YY" pattern="\d{2}/\d{2}/\d{2}" required>
+                </div>
+                <div class="col-md-2">
+                    <label for="otros_importe" class="form-label">Importe</label>
+                    <div class="input-group">
+                        <input type="number" step="0.01" class="form-control" id="otros_importe" name="importe" required>
+                        <span class="input-group-text">EUR</span>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <label for="otros_concepto" class="form-label">Concepto</label>
+                    <input type="text" class="form-control" id="otros_concepto" name="concepto"
+                           placeholder="ej: pinchazo" required>
+                </div>
+                <div class="col-md-2 d-flex align-items-end">
+                    <button type="submit" class="btn btn-secondary w-100">Guardar</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
 {% endblock %}
 
 {% block scripts %}

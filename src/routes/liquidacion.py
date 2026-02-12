@@ -275,6 +275,7 @@ async def liquidacion_page(
     results = []
     driver = None
     totals = {}
+    other_expenses_detail = []
 
     if driver_id and start_date and end_date:
         driver = session.get(Driver, driver_id)
@@ -286,6 +287,13 @@ async def liquidacion_page(
             vehicle = _resolve_vehicle(session, driver)
             results = _calculate_range(session, driver, vehicle, license_number, sd, ed)
             totals = _calculate_totals(results)
+
+            # Query other expenses detail for the period
+            other_expenses_detail = session.query(OtherExpense).filter(
+                OtherExpense.driver_id == driver_id,
+                OtherExpense.date >= sd,
+                OtherExpense.date <= ed,
+            ).order_by(OtherExpense.date).all()
 
     return templates.TemplateResponse(
         request,
@@ -299,6 +307,7 @@ async def liquidacion_page(
             "end_date": end_date,
             "results": results,
             "totals": totals,
+            "other_expenses_detail": other_expenses_detail,
         },
     )
 
