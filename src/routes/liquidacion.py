@@ -381,15 +381,28 @@ async def export_liquidacion_pdf(
 async def debug_trips(
     request: Request,
     driver_id: str = "",
+    driver_name: str = "",
     target_date: str = "",
-    user: dict = Depends(require_admin),
     session: Session = Depends(get_session),
 ):
     """Temporary debug: show FreeNow trips for a given driver/date."""
     from fastapi.responses import JSONResponse
 
-    if not driver_id or not target_date:
-        return JSONResponse({"error": "driver_id and target_date required"})
+    if not target_date:
+        return JSONResponse({"error": "target_date required"})
+
+    # Allow lookup by name if driver_id not known
+    if not driver_id and driver_name:
+        d = session.query(Driver).filter(
+            Driver.name.ilike(f"%{driver_name}%")
+        ).first()
+        if d:
+            driver_id = d.id
+
+    if not driver_id:
+        # List available drivers
+        drivers = session.query(Driver).filter_by(is_active=True).all()
+        return JSONResponse({"drivers": [{"id": d.id, "name": d.name, "license": d.license_number} for d in drivers]})
 
     driver = session.get(Driver, driver_id)
     if not driver:
