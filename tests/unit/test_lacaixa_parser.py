@@ -60,8 +60,9 @@ def test_lacaixa_filters_non_tpv_movements():
 
 
 def test_lacaixa_dates():
-    """Should correctly parse dates."""
+    """Should extract dates from description DDMM, not bank entry date."""
     records = parse_lacaixa_xlsx("tests/fixtures/lacaixa_sample.xlsx")
     dates = {r["date"] for r in records}
+    # "ON 340921234 2601" -> day=26, month=01; "ON ...2701" -> day=27, month=01
+    assert date(2026, 1, 26) in dates
     assert date(2026, 1, 27) in dates
-    assert date(2026, 1, 28) in dates

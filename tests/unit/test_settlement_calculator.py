@@ -147,7 +147,7 @@ def test_calculate_daily_settlement_with_all_sources():
 
 
 def test_calculate_daily_settlement_freenow_net_when_commission_shared():
-    """When driver pays FreeNow commission, APP amount uses net calculation."""
+    """When driver pays FreeNow commission, both recaudacion and APP use net calculation."""
     result = calculate_daily_settlement(
         prima_amount=Decimal("100.00"),
         freenow_fixed_bruto=Decimal("50.00"),
@@ -160,8 +160,11 @@ def test_calculate_daily_settlement_freenow_net_when_commission_shared():
         other_expenses_total=Decimal("0.00"),
         driver_config=_default_config(freenow_commission_driver_pct=Decimal("100.0")),
     )
-    # freenow_app = calculate_freenow_net(50)
-    # commission = 50 - (50/1.125) = 5.56; +IVA = 5.56*1.21 = 6.72; net = 50 - 6.72 = 43.28
+    # freenow_fixed = calculate_freenow_net(50) = 43.28
+    assert result["freenow_fixed"] == Decimal("43.28")
+    # recaudacion_total = 100 + 43.28 + 0 = 143.28
+    assert result["recaudacion_total"] == Decimal("143.28")
+    # freenow_app = calculate_freenow_net(50) = 43.28
     assert result["freenow_app"] == Decimal("43.28")
 
 
@@ -254,7 +257,7 @@ def test_calculate_daily_settlement_returns_all_keys():
         driver_config=_default_config(),
     )
     expected_keys = {
-        "prima_amount", "freenow_fixed_bruto", "uber_t3_fixed",
+        "prima_amount", "freenow_fixed_bruto", "freenow_fixed", "uber_t3_fixed",
         "recaudacion_total", "incidents_amount", "recaudacion_neta",
         "iva", "base_imponible", "driver_pct", "parte_proporcional",
         "tpv_visa_total", "freenow_app", "uber_total_payment",

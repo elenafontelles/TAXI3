@@ -110,9 +110,26 @@ def parse_lacaixa_xlsx(filepath: str) -> list[dict]:
         if not license_number:
             continue
 
-        # Parse date
+        # Parse date: extract DDMM from description (last 4 digits),
+        # year from "Data" column. E.g. "ON 340229632 2712" -> day=27, month=12
         date_val = row[col_date - 1].value if col_date <= len(row) else None
-        day = _parse_date(date_val)
+        base_date = _parse_date(date_val)
+        if not base_date:
+            continue
+
+        # Extract DDMM from the moviment description
+        day = None
+        ddmm_match = re.search(r'\b(\d{4})$', moviment_str)
+        if ddmm_match:
+            ddmm = ddmm_match.group(1)
+            dd, mm = int(ddmm[:2]), int(ddmm[2:])
+            try:
+                day = date(base_date.year, mm, dd)
+            except ValueError:
+                day = base_date
+        else:
+            day = base_date
+
         if not day:
             continue
 

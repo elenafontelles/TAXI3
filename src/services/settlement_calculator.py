@@ -103,8 +103,15 @@ def calculate_daily_settlement(
     Returns:
         Dict with all settlement values
     """
-    # 1. Recaudacion total = prima + freenow_fixed + uber_t3_fixed
-    recaudacion_total = prima_amount + freenow_fixed_bruto + uber_t3_fixed
+    # 1. FreeNow fixed: net or bruto depending on who pays the commission
+    freenow_commission_driver_pct = Decimal(str(driver_config.get("freenow_commission_driver_pct", 0)))
+    if freenow_commission_driver_pct > 0:
+        freenow_fixed = calculate_freenow_net(freenow_fixed_bruto)
+    else:
+        freenow_fixed = freenow_fixed_bruto
+
+    # Recaudacion total = prima + freenow_fixed (net or bruto) + uber_t3_fixed
+    recaudacion_total = prima_amount + freenow_fixed + uber_t3_fixed
 
     # 2. Recaudacion neta = recaudacion_total - incidencias
     recaudacion_neta = recaudacion_total - incidents_amount
@@ -129,7 +136,6 @@ def calculate_daily_settlement(
     ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
     # 7. FreeNow APP: si comision driver = 0, propietario asume comision
-    freenow_commission_driver_pct = Decimal(str(driver_config.get("freenow_commission_driver_pct", 0)))
     if freenow_commission_driver_pct == 0:
         freenow_app = freenow_app_paid_bruto
     else:
@@ -151,6 +157,7 @@ def calculate_daily_settlement(
     return {
         "prima_amount": prima_amount,
         "freenow_fixed_bruto": freenow_fixed_bruto,
+        "freenow_fixed": freenow_fixed,
         "uber_t3_fixed": uber_t3_fixed,
         "recaudacion_total": recaudacion_total,
         "incidents_amount": incidents_amount,

@@ -1,10 +1,13 @@
 # src/routes/liquidacion.py
-from datetime import date, timedelta
+from datetime import date, datetime, time, timedelta
 from decimal import Decimal
+from zoneinfo import ZoneInfo
 from fastapi import APIRouter, Request, Depends, Form
 from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_
+
+LOCAL_TZ = ZoneInfo("Europe/Madrid")
 from src.routes.auth import require_admin
 from src.database import get_session
 from src.models.driver import Driver
@@ -83,8 +86,10 @@ def _get_daily_data(session: Session, driver_id: str, vehicle: Vehicle | None,
     """Gather all daily data needed for settlement calculation."""
     vehicle_id = vehicle.id if vehicle else None
 
-    # Get trips for this day (by driver_id OR vehicle_id)
-    trip_filters = [func.date(Trip.started_at) == current]
+    # Get trips for this day using local timezone (Europe/Madrid)
+    local_start = datetime.combine(current, time.min, tzinfo=LOCAL_TZ)
+    local_end = datetime.combine(current + timedelta(days=1), time.min, tzinfo=LOCAL_TZ)
+    trip_filters = [Trip.started_at >= local_start, Trip.started_at < local_end]
     if driver_id and vehicle_id:
         trip_filters.append(
             (Trip.driver_id == driver_id) | (Trip.vehicle_id == vehicle_id)
@@ -227,7 +232,7 @@ def _calculate_range(session, driver, vehicle, license_number, sd, ed):
 
 
 TOTAL_KEYS = [
-    "prima_amount", "freenow_fixed_bruto", "uber_t3_fixed",
+    "prima_amount", "freenow_fixed_bruto", "freenow_fixed", "uber_t3_fixed",
     "recaudacion_total", "incidents_amount", "recaudacion_neta",
     "iva", "base_imponible", "parte_proporcional",
     "tpv_visa_total", "freenow_app", "uber_total_payment",
@@ -377,76 +382,3 @@ async def export_liquidacion_pdf(
     )
 
 
-@router.get("/liquidacion/debug-trips")
-async def debug_trips(
-    request: Request,
-    driver_id: str = "",
-    driver_name: str = "",
-    target_date: str = "",
-    session: Session = Depends(get_session),
-):
-    """Temporary debug: show FreeNow trips for a given driver/date."""
-    from fastapi.responses import JSONResponse
-
-    if not target_date:
-        return JSONResponse({"error": "target_date required"})
-
-    # Allow lookup by name if driver_id not known
-    if not driver_id and driver_name:
-        d = session.query(Driver).filter(
-            Driver.name.ilike(f"%{driver_name}%")
-        ).first()
-        if d:
-            driver_id = d.id
-
-    if not driver_id:
-        # List available drivers
-        drivers = session.query(Driver).filter_by(is_active=True).all()
-        return JSONResponse({"drivers": [{"id": d.id, "name": d.name, "license": d.license_number} for d in drivers]})
-
-    driver = session.get(Driver, driver_id)
-    if not driver:
-        return JSONResponse({"error": "driver not found"})
-
-    vehicle = _resolve_vehicle(session, driver)
-    vehicle_id = vehicle.id if vehicle else None
-    d = date.fromisoformat(target_date)
-
-    trip_filters = [func.date(Trip.started_at) == d]
-    if driver_id and vehicle_id:
-        trip_filters.append(
-            (Trip.driver_id == driver_id) | (Trip.vehicle_id == vehicle_id)
-        )
-    elif driver_id:
-        trip_filters.append(Trip.driver_id == driver_id)
-
-    day_trips = session.query(Trip).filter(*trip_filters).all()
-
-    freenow_trips = [
-        {
-            "id": t.id,
-            "external_id": t.external_id,
-            "source": t.source,
-            "fare_type": t.fare_type,
-            "payment_method": t.payment_method,
-            "gross_amount": str(t.gross_amount),
-            "tips": str(t.tips),
-            "started_at": str(t.started_at),
-            "driver_id": t.driver_id,
-            "vehicle_id": t.vehicle_id,
-        }
-        for t in day_trips
-        if t.source == "freenow"
-    ]
-
-    return JSONResponse({
-        "driver": driver.name,
-        "driver_id": driver_id,
-        "vehicle_id": vehicle_id,
-        "vehicle_plate": vehicle.plate if vehicle else None,
-        "date": target_date,
-        "freenow_trips": freenow_trips,
-        "freenow_count": len(freenow_trips),
-        "freenow_fixed": [t for t in freenow_trips if t["fare_type"] != "METERED"],
-        "freenow_fixed_count": len([t for t in freenow_trips if t["fare_type"] != "METERED"]),
-    })
