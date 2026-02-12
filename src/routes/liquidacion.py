@@ -86,55 +86,66 @@ def _get_daily_data(session: Session, driver_id: str, vehicle: Vehicle | None,
     """Gather all daily data needed for settlement calculation."""
     vehicle_id = vehicle.id if vehicle else None
 
-    # Get trips for this day using local timezone (Europe/Madrid)
+    # Driver/vehicle filter (shared by both queries)
+    def _owner_filter():
+        if driver_id and vehicle_id:
+            return (Trip.driver_id == driver_id) | (Trip.vehicle_id == vehicle_id)
+        elif driver_id:
+            return Trip.driver_id == driver_id
+        elif vehicle_id:
+            return Trip.vehicle_id == vehicle_id
+        return None
+
+    owner_cond = _owner_filter()
+
+    # Prima trips: naive datetimes (local time without timezone)
+    prima_filters = [
+        func.date(Trip.started_at) == current,
+        Trip.source == "prima",
+    ]
+    if owner_cond is not None:
+        prima_filters.append(owner_cond)
+    prima_trips = session.query(Trip).filter(*prima_filters).all()
+
+    # FreeNow trips: timezone-aware datetimes (Europe/Madrid)
     local_start = datetime.combine(current, time.min, tzinfo=LOCAL_TZ)
     local_end = datetime.combine(current + timedelta(days=1), time.min, tzinfo=LOCAL_TZ)
-    trip_filters = [Trip.started_at >= local_start, Trip.started_at < local_end]
-    if driver_id and vehicle_id:
-        trip_filters.append(
-            (Trip.driver_id == driver_id) | (Trip.vehicle_id == vehicle_id)
-        )
-    elif driver_id:
-        trip_filters.append(Trip.driver_id == driver_id)
-    elif vehicle_id:
-        trip_filters.append(Trip.vehicle_id == vehicle_id)
-
-    day_trips = session.query(Trip).filter(*trip_filters).all()
+    freenow_filters = [
+        Trip.started_at >= local_start,
+        Trip.started_at < local_end,
+        Trip.source == "freenow",
+    ]
+    if owner_cond is not None:
+        freenow_filters.append(owner_cond)
+    freenow_trips = session.query(Trip).filter(*freenow_filters).all()
 
     # Prima amount
     prima_amount = sum(
         Decimal(str(t.gross_amount or 0))
-        for t in day_trips
-        if t.source == "prima"
+        for t in prima_trips
     )
 
     # Incidents: prima trips with distance_km == 0 AND duration_minutes < 0.5
     incidents_amount = sum(
         Decimal(str(t.gross_amount or 0))
-        for t in day_trips
-        if t.source == "prima"
-        and (t.distance_km is not None and float(t.distance_km) == 0)
+        for t in prima_trips
+        if (t.distance_km is not None and float(t.distance_km) == 0)
         and (t.duration_minutes is not None and float(t.duration_minutes) < 0.5)
     )
 
     # FreeNow bruto that adds to recaudacion:
     # Only FIXED fare trips (METERED goes through taximeter/prima)
-    # After migration 005, fare_type is backfilled from raw_data
-    # Still handle NULL fare_type (records without FARE TYPE in CSV)
     freenow_fixed_bruto = sum(
         Decimal(str(t.gross_amount or 0))
-        for t in day_trips
-        if t.source == "freenow" and t.fare_type != "METERED"
+        for t in freenow_trips
+        if t.fare_type != "METERED"
     )
 
     # FreeNow APP-paid bruto (paid via app, not cash)
-    # After migration 005, payment_method is normalized to "CASH"/"APP"
-    # Still handle old format ("tarjeta") for safety
     freenow_app_paid_bruto = sum(
         Decimal(str(t.gross_amount or 0))
-        for t in day_trips
-        if t.source == "freenow"
-        and t.fare_type != "METERED"
+        for t in freenow_trips
+        if t.fare_type != "METERED"
         and t.payment_method in ("APP", "tarjeta")
     )
 
