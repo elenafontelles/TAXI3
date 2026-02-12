@@ -8,10 +8,10 @@ from src.services.settlement_calculator import (
 def test_calculate_freenow_net():
     bruto = Decimal("70.20")
     net = calculate_freenow_net(bruto)
-    # commission = 70.20 - (70.20 / 1.125) = 7.80
-    # commission + IVA = 7.80 * 1.21 = 9.438
-    # net = 70.20 - 9.438 = 60.76
-    assert net == Decimal("60.76")
+    # commission = 70.20 * 0.125 = 8.775
+    # commission + IVA = 8.775 * 1.21 = 10.61775
+    # net = 70.20 - 10.61775 = 59.58 (rounded)
+    assert net == Decimal("59.58")
 
 
 def test_calculate_freenow_net_zero():
@@ -160,12 +160,12 @@ def test_calculate_daily_settlement_freenow_net_when_commission_shared():
         other_expenses_total=Decimal("0.00"),
         driver_config=_default_config(freenow_commission_driver_pct=Decimal("100.0")),
     )
-    # freenow_fixed = calculate_freenow_net(50) = 43.28
-    assert result["freenow_fixed"] == Decimal("43.28")
-    # recaudacion_total = 100 + 43.28 + 0 = 143.28
-    assert result["recaudacion_total"] == Decimal("143.28")
-    # freenow_app = calculate_freenow_net(50) = 43.28
-    assert result["freenow_app"] == Decimal("43.28")
+    # freenow_fixed = calculate_freenow_net(50) = 50 - (50*0.125*1.21) = 42.44
+    assert result["freenow_fixed"] == Decimal("42.44")
+    # recaudacion_total = 100 + 42.44 + 0 = 142.44
+    assert result["recaudacion_total"] == Decimal("142.44")
+    # freenow_app = calculate_freenow_net(50) = 42.44
+    assert result["freenow_app"] == Decimal("42.44")
 
 
 def test_calculate_daily_settlement_with_fuel_deducted():
