@@ -375,3 +375,65 @@ async def export_liquidacion_pdf(
         media_type="application/pdf",
         headers={"Content-Disposition": f"attachment; filename={filename}"}
     )
+
+
+@router.get("/liquidacion/debug-trips")
+async def debug_trips(
+    request: Request,
+    driver_id: str = "",
+    target_date: str = "",
+    user: dict = Depends(require_admin),
+    session: Session = Depends(get_session),
+):
+    """Temporary debug: show FreeNow trips for a given driver/date."""
+    from fastapi.responses import JSONResponse
+
+    if not driver_id or not target_date:
+        return JSONResponse({"error": "driver_id and target_date required"})
+
+    driver = session.get(Driver, driver_id)
+    if not driver:
+        return JSONResponse({"error": "driver not found"})
+
+    vehicle = _resolve_vehicle(session, driver)
+    vehicle_id = vehicle.id if vehicle else None
+    d = date.fromisoformat(target_date)
+
+    trip_filters = [func.date(Trip.started_at) == d]
+    if driver_id and vehicle_id:
+        trip_filters.append(
+            (Trip.driver_id == driver_id) | (Trip.vehicle_id == vehicle_id)
+        )
+    elif driver_id:
+        trip_filters.append(Trip.driver_id == driver_id)
+
+    day_trips = session.query(Trip).filter(*trip_filters).all()
+
+    freenow_trips = [
+        {
+            "id": t.id,
+            "external_id": t.external_id,
+            "source": t.source,
+            "fare_type": t.fare_type,
+            "payment_method": t.payment_method,
+            "gross_amount": str(t.gross_amount),
+            "tips": str(t.tips),
+            "started_at": str(t.started_at),
+            "driver_id": t.driver_id,
+            "vehicle_id": t.vehicle_id,
+        }
+        for t in day_trips
+        if t.source == "freenow"
+    ]
+
+    return JSONResponse({
+        "driver": driver.name,
+        "driver_id": driver_id,
+        "vehicle_id": vehicle_id,
+        "vehicle_plate": vehicle.plate if vehicle else None,
+        "date": target_date,
+        "freenow_trips": freenow_trips,
+        "freenow_count": len(freenow_trips),
+        "freenow_fixed": [t for t in freenow_trips if t["fare_type"] != "METERED"],
+        "freenow_fixed_count": len([t for t in freenow_trips if t["fare_type"] != "METERED"]),
+    })
