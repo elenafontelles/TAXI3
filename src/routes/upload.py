@@ -242,7 +242,7 @@ async def process_upload(
 async def _process_fuel(request, user, platform, driver_id, vehicle_id, csv_file, session):
     """Handle Petroprix CSV or Repsol PDF fuel upload with auto vehicle/driver matching."""
     if platform == "repsol":
-        suffix = ".pdf"
+        suffix = ".xlsx"
     else:
         suffix = ".csv"
 
@@ -415,8 +415,11 @@ async def _process_uber(request, user, csv_file, session):
 
 
 async def _process_lacaixa(request, user, vehicle_id, csv_file, session):
-    """Handle La Caixa bank statement XLSX upload: import TpvDailyTotal records."""
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx") as tmp:
+    """Handle La Caixa bank statement XLS/XLSX upload: import TpvDailyTotal records."""
+    # Preserve original extension (.xls or .xlsx)
+    orig_name = (csv_file.filename or "").lower()
+    suffix = ".xls" if orig_name.endswith(".xls") and not orig_name.endswith(".xlsx") else ".xlsx"
+    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
         content = await csv_file.read()
         tmp.write(content)
         tmp_path = tmp.name
