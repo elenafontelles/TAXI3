@@ -240,7 +240,7 @@ async def process_upload(
 
 
 async def _process_fuel(request, user, platform, driver_id, vehicle_id, csv_file, session):
-    """Handle Petroprix CSV or Repsol PDF fuel upload with auto vehicle/driver matching."""
+    """Handle Petroprix CSV or Repsol/Solred XLSX fuel upload with auto vehicle/driver matching."""
     if platform == "repsol":
         suffix = ".xlsx"
     else:

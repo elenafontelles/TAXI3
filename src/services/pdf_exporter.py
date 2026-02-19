@@ -26,15 +26,14 @@ def export_settlement_to_pdf(
     pdf.cell(0, 7, f"Periodo: {start_date} - {end_date}", new_x="LMARGIN", new_y="NEXT")
     pdf.ln(5)
 
-    # Table headers
+    # Table headers (synced with liquidacion.html)
     headers = [
         ("Fecha", 18),
-        ("Prima", 14),
-        ("FreeNow", 14),
-        ("Uber T3", 14),
-        ("Rec.TOT", 15),
-        ("Incid.", 13),
-        ("Rec.Net", 15),
+        ("Prima", 15),
+        ("Inc", 13),
+        ("FNT3", 15),
+        ("UberT3", 14),
+        ("Rec.Net", 16),
         ("IVA", 12),
         ("Base", 14),
         ("%", 8),
@@ -72,10 +71,9 @@ def export_settlement_to_pdf(
         row_data = [
             date_str,
             _fmt(r.get("prima_amount", 0)),
+            _fmt(r.get("incidents_amount", 0)),
             _fmt(r.get("freenow_fixed", 0)),
             _fmt(r.get("uber_t3_fixed", 0)),
-            _fmt(r.get("recaudacion_total", 0)),
-            _fmt(r.get("incidents_amount", 0)),
             _fmt(r.get("recaudacion_neta", 0)),
             _fmt(r.get("iva", 0)),
             _fmt(r.get("base_imponible", 0)),
@@ -102,10 +100,9 @@ def export_settlement_to_pdf(
     total_data = [
         "TOTAL",
         _fmt(totals.get("prima_amount", 0)),
+        _fmt(totals.get("incidents_amount", 0)),
         _fmt(totals.get("freenow_fixed", 0)),
         _fmt(totals.get("uber_t3_fixed", 0)),
-        _fmt(totals.get("recaudacion_total", 0)),
-        _fmt(totals.get("incidents_amount", 0)),
         _fmt(totals.get("recaudacion_neta", 0)),
         _fmt(totals.get("iva", 0)),
         _fmt(totals.get("base_imponible", 0)),
