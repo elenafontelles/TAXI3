@@ -198,8 +198,26 @@ async def process_upload(
     os.unlink(tmp_path)
 
     lookups = _build_lookups(session)
+
+    # Determine date range and source from parsed records
+    source = records[0]["source"] if records else platform
+    dates = [t["started_at"] for t in records if "started_at" in t]
+    if dates:
+        from datetime import date as date_type
+        date_min = min(d.date() if hasattr(d, 'date') else d for d in dates)
+        date_max = max(d.date() if hasattr(d, 'date') else d for d in dates)
+
+        # Delete existing trips for this source in the date range
+        from sqlalchemy import func
+        deleted = session.query(Trip).filter(
+            Trip.source == source,
+            func.date(Trip.started_at) >= date_min,
+            func.date(Trip.started_at) <= date_max,
+        ).delete(synchronize_session=False)
+    else:
+        deleted = 0
+
     created = 0
-    updated = 0
     unmatched = 0
     new_trip_ids = []
 
@@ -210,20 +228,11 @@ async def process_upload(
             continue
 
         model_data = {k: v for k, v in t.items() if k in TRIP_FIELDS}
-        existing = session.query(Trip).filter_by(external_id=t["external_id"], source=t["source"]).first()
-        if existing:
-            for key, val in model_data.items():
-                setattr(existing, key, val)
-            existing.driver_id = row_driver
-            existing.vehicle_id = row_vehicle
-            existing.raw_data = t.get("raw_data")
-            updated += 1
-        else:
-            trip = Trip(driver_id=row_driver, vehicle_id=row_vehicle, raw_data=t.get("raw_data"), **model_data)
-            session.add(trip)
-            session.flush()
-            new_trip_ids.append(trip.id)
-            created += 1
+        trip = Trip(driver_id=row_driver, vehicle_id=row_vehicle, raw_data=t.get("raw_data"), **model_data)
+        session.add(trip)
+        session.flush()
+        new_trip_ids.append(trip.id)
+        created += 1
 
     session.commit()
 
@@ -231,7 +240,9 @@ async def process_upload(
     from src.services.incident_detector import create_incident_validations
     incidents = create_incident_validations(session, new_trip_ids)
 
-    msg = f"Importados: {created} nuevos, {updated} actualizados."
+    msg = f"Importados: {created} nuevos."
+    if deleted:
+        msg += f" {deleted} registros anteriores reemplazados."
     if unmatched:
         msg += f" Sin asignar (conductor/vehiculo no encontrado): {unmatched}."
     if incidents:
@@ -277,8 +288,31 @@ async def _process_fuel(request, user, platform, driver_id, vehicle_id, csv_file
 
     lookups = _build_lookups(session)
     source_file = csv_file.filename or f"{platform}_upload"
+    provider = records[0]["provider"] if records else platform
+
+    # Determine date range and plates from parsed records
+    date_min = min(rec["date"] for rec in records)
+    date_max = max(rec["date"] for rec in records)
+    plates = {_normalize_plate(rec["_plate"]) for rec in records if "_plate" in rec}
+
+    # Resolve vehicle IDs for the plates in the file
+    vehicle_ids_to_delete = set()
+    for plate in plates:
+        vid = lookups["plate_to_vehicle"].get(plate)
+        if vid:
+            vehicle_ids_to_delete.add(vid)
+
+    # Delete existing fuel records for these vehicles + provider in date range
+    deleted = 0
+    for vid in vehicle_ids_to_delete:
+        deleted += session.query(FuelExpense).filter(
+            FuelExpense.vehicle_id == vid,
+            FuelExpense.provider == provider,
+            FuelExpense.date >= date_min,
+            FuelExpense.date <= date_max,
+        ).delete()
+
     created = 0
-    updated = 0
     unmatched = 0
 
     for rec in records:
@@ -304,36 +338,24 @@ async def _process_fuel(request, user, platform, driver_id, vehicle_id, csv_file
             unmatched += 1
             continue
 
-        # Upsert by date + vehicle + amount + provider
-        existing = session.query(FuelExpense).filter_by(
+        expense = FuelExpense(
             date=rec["date"],
             vehicle_id=rec_vehicle,
+            driver_id=rec_driver,
+            liters=rec["liters"],
             amount=rec["amount"],
             provider=rec["provider"],
-        ).first()
-        if existing:
-            existing.driver_id = rec_driver
-            existing.liters = rec["liters"]
-            existing.source_file = source_file
-            existing.payment_method = rec.get("payment_method", "tarjeta")
-            updated += 1
-        else:
-            expense = FuelExpense(
-                date=rec["date"],
-                vehicle_id=rec_vehicle,
-                driver_id=rec_driver,
-                liters=rec["liters"],
-                amount=rec["amount"],
-                provider=rec["provider"],
-                source_file=source_file,
-                payment_method=rec.get("payment_method", "tarjeta"),
-            )
-            session.add(expense)
-            created += 1
+            source_file=source_file,
+            payment_method=rec.get("payment_method", "tarjeta"),
+        )
+        session.add(expense)
+        created += 1
 
     session.commit()
 
-    msg = f"Gastos combustible importados: {created} nuevos, {updated} actualizados."
+    msg = f"Gastos combustible importados: {created} nuevos."
+    if deleted:
+        msg += f" {deleted} registros anteriores reemplazados."
     if unmatched:
         msg += f" Sin vehiculo asignado: {unmatched}."
     return await _render_result(request, session, user, success=msg)
@@ -360,8 +382,22 @@ async def _process_uber(request, user, csv_file, session):
 
     lookups = _build_lookups(session)
     source_file = csv_file.filename or "uber_upload"
+
+    # Determine date range and license numbers from parsed records
+    license_numbers = {rec["license_number"] for rec in records}
+    date_min = min(rec["date"] for rec in records)
+    date_max = max(rec["date"] for rec in records)
+
+    # Delete existing records in this range for these licenses
+    deleted = 0
+    for lic in license_numbers:
+        deleted += session.query(UberDailySummary).filter(
+            UberDailySummary.license_number == lic,
+            UberDailySummary.date >= date_min,
+            UberDailySummary.date <= date_max,
+        ).delete()
+
     created = 0
-    updated = 0
     unmatched = 0
 
     for rec in records:
@@ -372,43 +408,29 @@ async def _process_uber(request, user, csv_file, session):
         if not vehicle_id:
             vehicle_id = lookups["license_to_vehicle"].get(lic_key)
 
-        # Upsert by date + license_number
-        existing = session.query(UberDailySummary).filter_by(
+        summary = UberDailySummary(
             date=rec["date"],
             license_number=rec["license_number"],
-        ).first()
-        if existing:
-            existing.vehicle_id = vehicle_id
-            existing.total_earnings = rec["total_earnings"]
-            existing.taximeter = rec["taximeter"]
-            existing.refund = rec["refund"]
-            existing.adjustments = rec["adjustments"]
-            existing.t3_fixed = rec["t3_fixed"]
-            existing.total_payment = rec["total_payment"]
-            existing.source_file = source_file
-            updated += 1
-        else:
-            summary = UberDailySummary(
-                date=rec["date"],
-                license_number=rec["license_number"],
-                vehicle_id=vehicle_id,
-                total_earnings=rec["total_earnings"],
-                taximeter=rec["taximeter"],
-                refund=rec["refund"],
-                adjustments=rec["adjustments"],
-                t3_fixed=rec["t3_fixed"],
-                total_payment=rec["total_payment"],
-                source_file=source_file,
-            )
-            session.add(summary)
-            created += 1
+            vehicle_id=vehicle_id,
+            total_earnings=rec["total_earnings"],
+            taximeter=rec["taximeter"],
+            refund=rec["refund"],
+            adjustments=rec["adjustments"],
+            t3_fixed=rec["t3_fixed"],
+            total_payment=rec["total_payment"],
+            source_file=source_file,
+        )
+        session.add(summary)
+        created += 1
 
         if not vehicle_id:
             unmatched += 1
 
     session.commit()
 
-    msg = f"Resumen diario Uber importado: {created} nuevos, {updated} actualizados."
+    msg = f"Resumen diario Uber importado: {created} nuevos."
+    if deleted:
+        msg += f" {deleted} registros anteriores reemplazados."
     if unmatched:
         msg += f" Sin vehiculo asignado: {unmatched}."
     return await _render_result(request, session, user, success=msg)
