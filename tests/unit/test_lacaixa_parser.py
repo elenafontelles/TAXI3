@@ -17,8 +17,8 @@ def test_detect_lacaixa_rejects_non_lacaixa():
 def test_parse_lacaixa_xlsx():
     """Should parse La Caixa bank statement into TPV daily totals."""
     records = parse_lacaixa_xlsx("tests/fixtures/lacaixa_sample.xlsx")
-    # 5 ON/C. entries with known terminal prefixes (TRANSF filtered out)
-    assert len(records) == 5
+    # 4 ON entries with known terminal prefixes (TRANSF and C. negative filtered out)
+    assert len(records) == 4
 
 
 def test_lacaixa_terminal_34_maps_to_092():
@@ -41,16 +41,17 @@ def test_lacaixa_terminal_36_maps_to_361():
     """Terminal prefix 36 should map to license 361."""
     records = parse_lacaixa_xlsx("tests/fixtures/lacaixa_sample.xlsx")
     lic_361 = [r for r in records if r["license_number"] == "361"]
-    # ON entry (111.65) + C. correction (0.13)
-    assert len(lic_361) == 2
+    # Only ON entry (111.65); C. correction (-0.13) is excluded (negative)
+    assert len(lic_361) == 1
+    assert lic_361[0]["amount"] == Decimal("111.65")
 
 
-def test_lacaixa_corrections_included():
-    """C. correction entries should be included with abs(amount)."""
+def test_lacaixa_negative_corrections_excluded():
+    """C. correction entries with negative amounts should be excluded."""
     records = parse_lacaixa_xlsx("tests/fixtures/lacaixa_sample.xlsx")
-    corrections = [r for r in records if r["amount"] == Decimal("0.13")]
-    assert len(corrections) == 1
-    assert corrections[0]["license_number"] == "361"
+    # The fixture has C. 363460767 with -0.13 — must not appear
+    corrections = [r for r in records if r["amount"] < 1]
+    assert len(corrections) == 0
 
 
 def test_lacaixa_filters_non_tpv_movements():

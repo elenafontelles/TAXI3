@@ -169,16 +169,16 @@ def parse_lacaixa_xlsx(filepath: str) -> list[dict]:
         if not day:
             continue
 
-        # Parse amount
+        # Parse amount — only positive amounts are TPV income
         import_val = row[col_import] if col_import < len(row) else None
         amount = _parse_amount(import_val)
-        if amount is None or amount == 0:
+        if amount is None or amount <= 0:
             continue
 
         records.append({
             "date": day,
             "license_number": license_number,
-            "amount": abs(amount),
+            "amount": amount,
         })
 
     close_fn()
