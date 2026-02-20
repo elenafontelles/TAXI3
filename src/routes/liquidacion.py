@@ -82,9 +82,17 @@ def _resolve_vehicle(session: Session, driver: Driver) -> Vehicle | None:
 
 
 def _get_daily_data(session: Session, driver_id: str, vehicle: Vehicle | None,
-                    license_number: str | None, current: date) -> dict:
-    """Gather all daily data needed for settlement calculation."""
+                    license_number: str | None, current: date,
+                    day_start_time: time | None = None) -> dict:
+    """Gather all daily data needed for settlement calculation.
+
+    Args:
+        day_start_time: Custom start time for this day's window. Only applied
+            to the first day of the range (caller controls when to pass it).
+            None means midnight (00:00).
+    """
     vehicle_id = vehicle.id if vehicle else None
+    start_time_val = day_start_time if day_start_time else time.min
 
     # Driver/vehicle filter (shared by both queries)
     def _owner_filter():
@@ -99,8 +107,11 @@ def _get_daily_data(session: Session, driver_id: str, vehicle: Vehicle | None,
     owner_cond = _owner_filter()
 
     # Prima trips: naive datetimes (local time without timezone)
+    prima_start = datetime.combine(current, start_time_val)
+    prima_end = datetime.combine(current + timedelta(days=1), time.min)
     prima_filters = [
-        func.date(Trip.started_at) == current,
+        Trip.started_at >= prima_start,
+        Trip.started_at < prima_end,
         Trip.source == "prima",
     ]
     if owner_cond is not None:
@@ -108,7 +119,7 @@ def _get_daily_data(session: Session, driver_id: str, vehicle: Vehicle | None,
     prima_trips = session.query(Trip).filter(*prima_filters).all()
 
     # FreeNow trips: timezone-aware datetimes (Europe/Madrid)
-    local_start = datetime.combine(current, time.min, tzinfo=LOCAL_TZ)
+    local_start = datetime.combine(current, start_time_val, tzinfo=LOCAL_TZ)
     local_end = datetime.combine(current + timedelta(days=1), time.min, tzinfo=LOCAL_TZ)
     freenow_filters = [
         Trip.started_at >= local_start,
@@ -135,15 +146,17 @@ def _get_daily_data(session: Session, driver_id: str, vehicle: Vehicle | None,
 
     # FreeNow bruto that adds to recaudacion:
     # Only FIXED fare trips (METERED goes through taximeter/prima)
+    # Includes tips (TOUR TIP) as absolute value
     freenow_fixed_bruto = sum(
-        Decimal(str(t.gross_amount or 0))
+        Decimal(str(t.gross_amount or 0)) + abs(Decimal(str(t.tips or 0)))
         for t in freenow_trips
         if t.fare_type != "METERED"
     )
 
     # FreeNow APP-paid bruto (paid via app, not cash)
+    # Includes tips (TOUR TIP) as absolute value
     freenow_app_paid_bruto = sum(
-        Decimal(str(t.gross_amount or 0))
+        Decimal(str(t.gross_amount or 0)) + abs(Decimal(str(t.tips or 0)))
         for t in freenow_trips
         if t.fare_type != "METERED"
         and t.payment_method in ("APP", "tarjeta")
@@ -225,13 +238,17 @@ def _build_driver_config(driver: Driver) -> dict:
     }
 
 
-def _calculate_range(session, driver, vehicle, license_number, sd, ed):
+def _calculate_range(session, driver, vehicle, license_number, sd, ed,
+                     start_time: time | None = None):
     """Calculate settlements for a date range."""
     driver_config = _build_driver_config(driver)
     results = []
     current = sd
     while current <= ed:
-        data = _get_daily_data(session, driver.id, vehicle, license_number, current)
+        # Apply custom start_time only to the first day
+        day_start = start_time if current == sd else None
+        data = _get_daily_data(session, driver.id, vehicle, license_number,
+                               current, day_start_time=day_start)
         settlement = calculate_daily_settlement(
             driver_config=driver_config,
             **data,
@@ -266,6 +283,7 @@ async def liquidacion_page(
     driver_id: str = "",
     start_date: str = "",
     end_date: str = "",
+    start_time: str = "00:00",
     user: dict = Depends(require_admin),
     session: Session = Depends(get_session),
 ):
@@ -277,6 +295,13 @@ async def liquidacion_page(
     totals = {}
     other_expenses_detail = []
 
+    # Parse start_time (HH:MM)
+    try:
+        st_parts = start_time.split(":")
+        start_time_obj = time(int(st_parts[0]), int(st_parts[1]))
+    except (ValueError, IndexError):
+        start_time_obj = time.min
+
     if driver_id and start_date and end_date:
         driver = session.get(Driver, driver_id)
         sd = date.fromisoformat(start_date)
@@ -285,7 +310,8 @@ async def liquidacion_page(
         if driver:
             license_number = _extract_license_number(driver)
             vehicle = _resolve_vehicle(session, driver)
-            results = _calculate_range(session, driver, vehicle, license_number, sd, ed)
+            results = _calculate_range(session, driver, vehicle, license_number,
+                                       sd, ed, start_time=start_time_obj)
             totals = _calculate_totals(results)
 
             # Query other expenses detail for the period
@@ -305,6 +331,7 @@ async def liquidacion_page(
             "driver_id": driver_id,
             "start_date": start_date,
             "end_date": end_date,
+            "start_time": start_time,
             "results": results,
             "totals": totals,
             "other_expenses_detail": other_expenses_detail,
@@ -320,6 +347,7 @@ async def export_liquidacion(
     driver_id: str = Form(...),
     start_date: str = Form(...),
     end_date: str = Form(...),
+    start_time: str = Form("00:00"),
     user: dict = Depends(require_admin),
     session: Session = Depends(get_session),
 ):
@@ -335,10 +363,17 @@ async def export_liquidacion(
     sd = date.fromisoformat(start_date)
     ed = date.fromisoformat(end_date)
 
+    try:
+        st_parts = start_time.split(":")
+        start_time_obj = time(int(st_parts[0]), int(st_parts[1]))
+    except (ValueError, IndexError):
+        start_time_obj = time.min
+
     license_number = _extract_license_number(driver)
     vehicle = _resolve_vehicle(session, driver)
 
-    results = _calculate_range(session, driver, vehicle, license_number, sd, ed)
+    results = _calculate_range(session, driver, vehicle, license_number, sd, ed,
+                               start_time=start_time_obj)
     totals = _calculate_totals(results)
 
     buffer = export_settlement_to_excel(
@@ -364,6 +399,7 @@ async def export_liquidacion_pdf(
     driver_id: str = Form(...),
     start_date: str = Form(...),
     end_date: str = Form(...),
+    start_time: str = Form("00:00"),
     user: dict = Depends(require_admin),
     session: Session = Depends(get_session),
 ):
@@ -379,10 +415,17 @@ async def export_liquidacion_pdf(
     sd = date.fromisoformat(start_date)
     ed = date.fromisoformat(end_date)
 
+    try:
+        st_parts = start_time.split(":")
+        start_time_obj = time(int(st_parts[0]), int(st_parts[1]))
+    except (ValueError, IndexError):
+        start_time_obj = time.min
+
     license_number = _extract_license_number(driver)
     vehicle = _resolve_vehicle(session, driver)
 
-    results = _calculate_range(session, driver, vehicle, license_number, sd, ed)
+    results = _calculate_range(session, driver, vehicle, license_number, sd, ed,
+                               start_time=start_time_obj)
     totals = _calculate_totals(results)
 
     buffer = export_settlement_to_pdf(

@@ -37,7 +37,7 @@
     <div class="card-body">
         <form method="get" action="{{ root_path }}/liquidacion">
             <div class="row mb-3">
-                <div class="col-md-4">
+                <div class="col-md-3">
                     <label for="driver_id" class="form-label">Conductor</label>
                     <select class="form-select" id="driver_id" name="driver_id" required>
                         <option value="">Seleccionar conductor...</option>
@@ -48,15 +48,20 @@
                         {% endfor %}
                     </select>
                 </div>
-                <div class="col-md-3">
+                <div class="col-md-2">
                     <label for="start_date" class="form-label">Fecha inicio</label>
                     <input type="date" class="form-control" id="start_date" name="start_date"
                            value="{{ start_date }}" required>
                 </div>
-                <div class="col-md-3">
+                <div class="col-md-2">
                     <label for="end_date" class="form-label">Fecha fin</label>
                     <input type="date" class="form-control" id="end_date" name="end_date"
                            value="{{ end_date }}" required>
+                </div>
+                <div class="col-md-1">
+                    <label for="start_time" class="form-label">Hora inicio</label>
+                    <input type="time" class="form-control" id="start_time" name="start_time"
+                           value="{{ start_time or '00:00' }}">
                 </div>
                 <div class="col-md-2 d-flex align-items-end">
                     <button type="submit" class="btn btn-primary w-100">Generar cierre</button>
@@ -77,6 +82,7 @@
                 <input type="hidden" name="driver_id" value="{{ driver_id }}">
                 <input type="hidden" name="start_date" value="{{ start_date }}">
                 <input type="hidden" name="end_date" value="{{ end_date }}">
+                <input type="hidden" name="start_time" value="{{ start_time or '00:00' }}">
                 <button type="submit" class="btn btn-success btn-sm">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-file-earmark-excel me-1" viewBox="0 0 16 16">
                         <path d="M5.884 6.68a.5.5 0 1 0-.768.64L7.349 10l-2.233 2.68a.5.5 0 0 0 .768.64L8 10.781l2.116 2.54a.5.5 0 0 0 .768-.641L8.651 10l2.233-2.68a.5.5 0 0 0-.768-.64L8 9.219l-2.116-2.54z"/>
@@ -89,6 +95,7 @@
                 <input type="hidden" name="driver_id" value="{{ driver_id }}">
                 <input type="hidden" name="start_date" value="{{ start_date }}">
                 <input type="hidden" name="end_date" value="{{ end_date }}">
+                <input type="hidden" name="start_time" value="{{ start_time or '00:00' }}">
                 <button type="submit" class="btn btn-danger btn-sm">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-file-earmark-pdf me-1" viewBox="0 0 16 16">
                         <path d="M14 14V4.5L9.5 0H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2M9.5 3A1.5 1.5 0 0 0 11 4.5h2V14a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1h5.5z"/>
