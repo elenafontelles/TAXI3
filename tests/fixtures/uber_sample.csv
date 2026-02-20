@@ -1,4 +1,7 @@
-Trip ID,Driver,Date/Time,City,Product,Fare,Tip,Tolls,Total
-UBER001,Ivan Tintore,2026-01-27 10:30,Barcelona,UberX,22.50,3.00,0.00,25.50
-UBER002,Ivan Tintore,2026-01-27 14:15,Barcelona,UberX,15.00,0.00,2.00,17.00
-UBER003,Ivan Tintore,2026-01-27 18:45,Barcelona,Comfort,35.00,5.00,0.00,40.00
+﻿UUID de la transacción,UUID del conductor,Nombre del conductor,Apellido del conductor,UUID del viaje,Descripción,Nombre de la organización,Alias de la organización,en comparación con los informes,Importe que se te ha pagado,Importe que se te ha pagado : Tus ganancias,Importe que se te ha pagado : Saldo del viaje : Pagos : Efectivo cobrado,Importe que se te ha pagado : Tus ganancias : Precio,Importe que se te ha pagado : Tus ganancias : Impuestos,Importe que se te ha pagado:Tus ganancias:Precio:Precio,Importe que se te ha pagado:Tus ganancias:Precio del servicio,Importe que se te ha pagado:Tus ganancias:Precio:Recargo de aeropuerto,Importe que se te ha pagado:Tus ganancias:Propina,Importe que se te ha pagado:Tus ganancias:Precio:Ajuste de precio,Importe que se te ha pagado:Saldo del viaje:Pagos:Transferido a una cuenta bancaria,Importe que se te ha pagado:Tus ganancias:Precio:Taxímetro,Importe que se te ha pagado:Saldo del viaje:Reembolsos:Recargo de recogida en aeropuerto
+aaa-111,drv-001,IVAN,ALSINA BURGOS,trip-001,trip completed order,ORG,ALIAS,2026-01-29 08:01:15.836 +0100 CET,29.08,29.08,0,33.05,0,33.05,-3.97,0,0,0,0,0,0
+bbb-222,drv-001,IVAN,ALSINA BURGOS,trip-002,trip completed order,ORG,ALIAS,2026-01-29 15:57:14.777 +0100 CET,21.47,21.47,0,24.40,0,24.40,-2.93,0,0,0,0,0,0
+ccc-333,drv-001,IVAN,ALSINA BURGOS,trip-003,trip completed order,ORG,ALIAS,2026-01-30 07:18:39.967 +0100 CET,37.74,33.44,0,38.00,0,0,-4.56,0,0,0,0,38.00,4.30
+ddd-444,drv-001,IVAN,ALSINA BURGOS,trip-004,trip completed order,ORG,ALIAS,2026-01-30 19:09:28.815 +0100 CET,10.56,10.56,0,12.00,0,12.00,-1.44,0,0,0,0,0,0
+eee-555,00000000-0000-0000-0000-000000000000,,,,so.payout,ORG,ALIAS,2026-02-02 04:01:39.259 +0100 CET,-266.03,0,0,0,0,0,0,0,0,0,-266.03,0,0
+fff-666,drv-001,IVAN,ALSINA BURGOS,trip-005,trip fare adjust order,ORG,ALIAS,2026-01-30 10:16:28.119 +0100 CET,3.00,3.00,0,0,0,0,0,0,3.00,0,0,0,0

@@ -362,18 +362,18 @@ async def _process_fuel(request, user, platform, driver_id, vehicle_id, csv_file
 
 
 async def _process_uber(request, user, csv_file, session):
-    """Handle Uber daily summary XLSX upload: import UberDailySummary records."""
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx") as tmp:
+    """Handle Uber payments CSV upload: import UberDailySummary records."""
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".csv") as tmp:
         content = await csv_file.read()
         tmp.write(content)
         tmp_path = tmp.name
 
     try:
-        from scripts.parsers.uber_parser import parse_uber_xlsx
-        records = parse_uber_xlsx(tmp_path)
+        from scripts.parsers.uber_parser import parse_uber_csv
+        records = parse_uber_csv(tmp_path)
     except Exception as e:
         os.unlink(tmp_path)
-        return await _render_result(request, session, user, error=f"Error al parsear Uber XLSX: {e}")
+        return await _render_result(request, session, user, error=f"Error al parsear Uber CSV: {e}")
 
     os.unlink(tmp_path)
 
@@ -383,10 +383,42 @@ async def _process_uber(request, user, csv_file, session):
     lookups = _build_lookups(session)
     source_file = csv_file.filename or "uber_upload"
 
-    # Determine date range and license numbers from parsed records
-    license_numbers = {rec["license_number"] for rec in records}
-    date_min = min(rec["date"] for rec in records)
-    date_max = max(rec["date"] for rec in records)
+    # Resolve driver names to license numbers
+    resolved_records = []
+    for rec in records:
+        driver_name = rec.get("_driver_name", "").strip().lower()
+        driver_id = None
+        license_number = None
+
+        # Match driver by name
+        if driver_name:
+            for db_name, db_id in lookups["driver_names"]:
+                if driver_name == db_name or db_name.startswith(driver_name) or driver_name.startswith(db_name):
+                    driver_id = db_id
+                    break
+
+        # Get license number from driver
+        if driver_id:
+            drivers = session.query(Driver).filter_by(id=driver_id).first()
+            if drivers and drivers.license_number:
+                lic = drivers.license_number.strip()
+                if " - " in lic:
+                    license_number = lic.split(" - ")[0].strip()
+                else:
+                    license_number = lic
+
+        if license_number:
+            rec["license_number"] = license_number
+            rec["_driver_id"] = driver_id
+            resolved_records.append(rec)
+
+    if not resolved_records:
+        return await _render_result(request, session, user, error="No se pudo resolver ningún conductor del archivo Uber")
+
+    # Determine date range and license numbers
+    license_numbers = {rec["license_number"] for rec in resolved_records}
+    date_min = min(rec["date"] for rec in resolved_records)
+    date_max = max(rec["date"] for rec in resolved_records)
 
     # Delete existing records in this range for these licenses
     deleted = 0
@@ -400,7 +432,7 @@ async def _process_uber(request, user, csv_file, session):
     created = 0
     unmatched = 0
 
-    for rec in records:
+    for rec in resolved_records:
         lic_key = rec["license_number"].strip().lstrip("0")
 
         # Resolve vehicle by license number
@@ -412,10 +444,8 @@ async def _process_uber(request, user, csv_file, session):
             date=rec["date"],
             license_number=rec["license_number"],
             vehicle_id=vehicle_id,
-            total_earnings=rec["total_earnings"],
-            taximeter=rec["taximeter"],
-            refund=rec["refund"],
-            adjustments=rec["adjustments"],
+            total_earnings=rec.get("total_earnings"),
+            taximeter=rec.get("taximeter"),
             t3_fixed=rec["t3_fixed"],
             total_payment=rec["total_payment"],
             source_file=source_file,

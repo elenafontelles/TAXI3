@@ -1,110 +1,157 @@
-"""Parse Uber daily summary XLSX export into normalized daily summary dicts."""
+"""Parse Uber payments CSV export into daily summary dicts per driver."""
 from __future__ import annotations
+import csv
+import re
+from collections import defaultdict
 from datetime import datetime, date
 from decimal import Decimal
-from openpyxl import load_workbook
 
 
 def detect_uber_file(filepath: str) -> bool:
-    """Detect if file is an Uber daily summary XLSX export."""
-    if not filepath.endswith(".xlsx"):
+    """Detect if file is an Uber payments CSV export."""
+    if not filepath.lower().endswith(".csv"):
         return False
     try:
-        wb = load_workbook(filepath, read_only=True, data_only=True)
-        sheet = wb.active
-        # Check for expected header columns in row 1
-        headers = [str(sheet.cell(1, c).value or "").strip().lower() for c in range(1, 9)]
-        wb.close()
-        return "licencia" in headers and "dia" in headers
+        with open(filepath, encoding="utf-8-sig") as f:
+            reader = csv.reader(f)
+            header = next(reader, None)
+            if not header:
+                return False
+            header_lower = [h.strip().lower() for h in header]
+            return (
+                "uuid del conductor" in header_lower
+                and "importe que se te ha pagado" in header_lower
+            )
     except Exception:
         return False
 
 
-def _parse_decimal(value) -> Decimal:
-    """Parse a cell value into Decimal, handling None and string formats."""
-    if value is None:
+def _parse_decimal(value: str) -> Decimal:
+    """Parse a string value into Decimal."""
+    if not value or not value.strip():
         return Decimal("0.00")
-    s = str(value).strip().replace(",", ".")
+    s = value.strip().replace(",", ".")
     try:
         return Decimal(s).quantize(Decimal("0.01"))
     except Exception:
         return Decimal("0.00")
 
 
-def _parse_date(value) -> date | None:
-    """Parse a cell value into a date object."""
-    if isinstance(value, datetime):
-        return value.date()
-    if isinstance(value, date):
-        return value
-    if value is None:
+def _parse_date_from_timestamp(ts: str) -> date | None:
+    """Extract date from Uber timestamp like '2026-01-29 08:01:15.836 +0100 CET'."""
+    if not ts or not ts.strip():
         return None
-    s = str(value).strip()
-    for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y"):
+    # Extract just the date part (first 10 chars: YYYY-MM-DD)
+    m = re.match(r"(\d{4}-\d{2}-\d{2})", ts.strip())
+    if m:
         try:
-            return datetime.strptime(s, fmt).date()
+            return datetime.strptime(m.group(1), "%Y-%m-%d").date()
         except ValueError:
-            continue
+            return None
     return None
 
 
-def parse_uber_xlsx(filepath: str) -> list[dict]:
-    """Parse Uber daily summary XLSX export.
+def parse_uber_csv(filepath: str) -> list[dict]:
+    """Parse Uber payments CSV into daily summaries per driver.
 
-    Expected columns (row 1 = headers, row 2+ = data):
-    Licencia, Dia, Ganancias totales, Taximetro, Reembolso, Ajustes,
-    Total T3 fija uber, Total pago uber
+    Reads per-trip rows, filters out non-trip rows (so.payout, etc.),
+    and aggregates daily totals per driver.
 
-    Returns a list of dicts ready for UberDailySummary model creation.
+    Key columns:
+    - Col C+D: Driver first name + last name
+    - Col F: Descripcion (filter: only rows containing 'trip')
+    - Col I: Timestamp (for date extraction)
+    - Col J: Importe que se te ha pagado -> total_payment
+    - Col K: Tus ganancias -> used for t3_fixed calculation
+    - Col U: Taximetro -> subtracted from ganancias for t3_fixed
+
+    Returns list of dicts with:
+        date, _driver_name, t3_fixed, total_payment, total_earnings, taximeter
     """
-    wb = load_workbook(filepath, read_only=True, data_only=True)
-    sheet = wb.active
+    with open(filepath, encoding="utf-8-sig") as f:
+        reader = csv.reader(f)
+        header = next(reader, None)
+        if not header:
+            return []
 
-    # Read headers from row 1 and build column index
-    headers = {}
-    for col in range(1, sheet.max_column + 1):
-        val = sheet.cell(1, col).value
-        if val:
-            headers[str(val).strip().lower()] = col
+        # Build column index from header names
+        header_map = {}
+        for i, h in enumerate(header):
+            header_map[h.strip()] = i
 
-    # Map expected header names to column indices
-    col_map = {
-        "licencia": headers.get("licencia"),
-        "dia": headers.get("dia"),
-        "ganancias_totales": headers.get("ganancias totales"),
-        "taximetro": headers.get("taximetro") or headers.get("tax\u00edmetro"),
-        "reembolso": headers.get("reembolso"),
-        "ajustes": headers.get("ajustes"),
-        "t3_fixed": headers.get("total t3 fija uber"),
-        "total_payment": headers.get("total pago uber"),
-    }
+        # Column indices (0-based)
+        col_nombre = header_map.get("Nombre del conductor")
+        col_apellido = header_map.get("Apellido del conductor")
+        col_desc = header_map.get("Descripción") or header_map.get("Descripcion")
+        col_timestamp = header_map.get("en comparación con los informes")
+        col_pagado = header_map.get("Importe que se te ha pagado")
+        col_ganancias = header_map.get("Importe que se te ha pagado : Tus ganancias")
+        col_taximetro = header_map.get(
+            "Importe que se te ha pagado:Tus ganancias:Precio:Taxímetro"
+        ) or header_map.get(
+            "Importe que se te ha pagado:Tus ganancias:Precio:Taximetro"
+        )
 
-    records = []
-    for row in sheet.iter_rows(min_row=2, values_only=False):
-        row_values = {col: row[idx - 1].value if idx and idx <= len(row) else None
-                      for col, idx in col_map.items()}
+        if col_pagado is None or col_ganancias is None:
+            return []
 
-        license_number = str(row_values.get("licencia") or "").strip()
-        if not license_number:
-            continue
-
-        day = _parse_date(row_values.get("dia"))
-        if not day:
-            continue
-
-        t3_fixed = _parse_decimal(row_values.get("t3_fixed"))
-        total_payment = _parse_decimal(row_values.get("total_payment"))
-
-        records.append({
-            "date": day,
-            "license_number": license_number,
-            "total_earnings": _parse_decimal(row_values.get("ganancias_totales")),
-            "taximeter": _parse_decimal(row_values.get("taximetro")),
-            "refund": _parse_decimal(row_values.get("reembolso")),
-            "adjustments": _parse_decimal(row_values.get("ajustes")),
-            "t3_fixed": t3_fixed,
-            "total_payment": total_payment,
+        # Aggregate daily totals per driver
+        # Key: (date, driver_name) -> {t3_fixed, total_payment, total_earnings, taximeter}
+        daily = defaultdict(lambda: {
+            "t3_fixed": Decimal("0.00"),
+            "total_payment": Decimal("0.00"),
+            "total_earnings": Decimal("0.00"),
+            "taximeter": Decimal("0.00"),
         })
 
-    wb.close()
+        for row in reader:
+            if len(row) <= max(filter(None, [col_pagado, col_ganancias, col_desc, col_timestamp]), default=0):
+                continue
+
+            # Filter: only trip rows (skip so.payout, etc.)
+            desc = row[col_desc].strip() if col_desc is not None and col_desc < len(row) else ""
+            if "trip" not in desc.lower():
+                continue
+
+            # Extract date
+            ts = row[col_timestamp] if col_timestamp is not None and col_timestamp < len(row) else ""
+            day = _parse_date_from_timestamp(ts)
+            if not day:
+                continue
+
+            # Extract driver name
+            nombre = row[col_nombre].strip() if col_nombre is not None and col_nombre < len(row) else ""
+            apellido = row[col_apellido].strip() if col_apellido is not None and col_apellido < len(row) else ""
+            driver_name = f"{nombre} {apellido}".strip()
+            if not driver_name:
+                continue
+
+            # Parse amounts
+            ganancias = _parse_decimal(row[col_ganancias] if col_ganancias < len(row) else "")
+            taximetro_val = Decimal("0.00")
+            if col_taximetro is not None and col_taximetro < len(row):
+                taximetro_val = _parse_decimal(row[col_taximetro])
+            pagado = _parse_decimal(row[col_pagado] if col_pagado < len(row) else "")
+
+            # t3_fixed per trip = ganancias - taximetro
+            t3_per_trip = ganancias - taximetro_val
+
+            key = (day, driver_name)
+            daily[key]["t3_fixed"] += t3_per_trip
+            daily[key]["total_payment"] += pagado
+            daily[key]["total_earnings"] += ganancias
+            daily[key]["taximeter"] += taximetro_val
+
+    # Convert to list of dicts
+    records = []
+    for (day, driver_name), totals in sorted(daily.items()):
+        records.append({
+            "date": day,
+            "_driver_name": driver_name,
+            "t3_fixed": totals["t3_fixed"].quantize(Decimal("0.01")),
+            "total_payment": totals["total_payment"].quantize(Decimal("0.01")),
+            "total_earnings": totals["total_earnings"].quantize(Decimal("0.01")),
+            "taximeter": totals["taximeter"].quantize(Decimal("0.01")),
+        })
+
     return records
