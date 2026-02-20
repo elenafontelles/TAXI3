@@ -104,7 +104,8 @@ def calculate_daily_settlement(
         Dict with all settlement values
     """
     # 1. FreeNow fixed: net or bruto depending on who pays the commission
-    freenow_commission_driver_pct = Decimal(str(driver_config.get("freenow_commission_driver_pct", 0)))
+    _fn_pct_raw = driver_config.get("freenow_commission_driver_pct") or 0
+    freenow_commission_driver_pct = Decimal(str(_fn_pct_raw))
     if freenow_commission_driver_pct > 0:
         freenow_fixed = calculate_freenow_net(freenow_fixed_bruto)
     else:
