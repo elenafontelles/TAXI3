@@ -17,6 +17,7 @@ from src.models.uber_daily_summary import UberDailySummary
 from src.models.fuel_expense import FuelExpense
 from src.models.other_expense import OtherExpense
 from src.models.vehicle import Vehicle
+from src.models.pending_validation import PendingValidation
 from src.services.settlement_calculator import calculate_daily_settlement
 from src.services.excel_exporter import export_settlement_to_excel
 from src.services.pdf_exporter import export_settlement_to_pdf
@@ -137,11 +138,20 @@ def _get_daily_data(session: Session, driver_id: str, vehicle: Vehicle | None,
     )
 
     # Incidents: prima trips with distance_km == 0 AND duration_minutes < 0.5
+    # Exclude trips marked as "invalid" in PendingValidation
+    invalidated_trip_ids = set(
+        pv.trip_id for pv in session.query(PendingValidation.trip_id).filter(
+            PendingValidation.validation_type == "incident",
+            PendingValidation.status == "invalid",
+            PendingValidation.trip_id.isnot(None),
+        ).all()
+    )
     incidents_amount = sum(
         Decimal(str(t.gross_amount or 0))
         for t in prima_trips
         if (t.distance_km is not None and float(t.distance_km) == 0)
         and (t.duration_minutes is not None and float(t.duration_minutes) < 0.5)
+        and t.id not in invalidated_trip_ids
     )
 
     # FreeNow bruto that adds to recaudacion:
