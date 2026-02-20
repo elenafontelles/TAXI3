@@ -41,3 +41,11 @@ def test_prima_time_column():
     assert trips[0]["duration_minutes"] == 12.0   # 0:12:00
     assert trips[1]["duration_minutes"] == 18.0   # 0:18:00
     assert trips[2]["duration_minutes"] == 8.0    # 0:08:00
+
+
+def test_prima_km_free():
+    """km_free column should be parsed from Prima CSV."""
+    trips = parse_prima_csv("tests/fixtures/prima_sample.csv")
+    assert trips[0]["km_free"] == 1.80
+    assert trips[1]["km_free"] == 2.30
+    assert trips[2]["km_free"] == 0.90

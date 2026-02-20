@@ -98,6 +98,7 @@ def parse_prima_csv(filepath: str) -> list[dict]:
                 "payout_amount": gross,
                 "payment_method": row["PaymentMode"].strip().lower(),
                 "distance_km": _parse_decimal(row["km"]),
+                "km_free": _parse_decimal(row["km_free"]) if row.get("km_free", "").strip() else None,
                 "tariff_code": row["TariffsUsed"].strip(),
                 "origin_lat": _parse_coord(row.get("TripStartLatitude", "")),
                 "origin_lng": _parse_coord(row.get("TripStartLongitude", "")),

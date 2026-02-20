@@ -25,6 +25,7 @@ class Trip(Base):
     origin_address: Mapped[str | None] = mapped_column(Text)
     dest_address: Mapped[str | None] = mapped_column(Text)
     distance_km: Mapped[float | None] = mapped_column(Numeric(10, 2))
+    km_free: Mapped[float | None] = mapped_column(Numeric(10, 2))
     currency_code: Mapped[str] = mapped_column(String(3), default="EUR", nullable=False)
     gross_amount: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)
     commission: Mapped[float] = mapped_column(Numeric(10, 2), default=0)

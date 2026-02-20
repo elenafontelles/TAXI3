@@ -9,7 +9,6 @@ from src.routes.auth import require_auth
 from src.database import get_session
 from src.models.driver import Driver
 from src.models.trip import Trip
-from src.models.shift import Shift
 from src.models.uber_daily_summary import UberDailySummary
 from src.models.fuel_expense import FuelExpense
 from src.services.settlement_calculator import calculate_freenow_net
@@ -41,6 +40,7 @@ def _get_driver_kpis(session: Session, driver: Driver, sd: date, ed: date) -> di
     prima_amount = sum((Decimal(str(t.gross_amount or 0)) for t in prima_trips), Decimal("0"))
     prima_trip_count = len(prima_trips)
     prima_km = sum((Decimal(str(t.distance_km or 0)) for t in prima_trips), Decimal("0"))
+    prima_km_free = sum((Decimal(str(t.km_free or 0)) for t in prima_trips), Decimal("0"))
 
     # Days worked from prima (unique dates)
     prima_days = set()
@@ -48,17 +48,10 @@ def _get_driver_kpis(session: Session, driver: Driver, sd: date, ed: date) -> di
         if t.started_at:
             prima_days.add(t.started_at.date() if hasattr(t.started_at, 'date') else t.started_at)
 
-    # --- Shifts (for km_free) ---
-    shifts = session.query(Shift).filter(
-        Shift.driver_id == driver_id,
-        func.date(Shift.started_at) >= sd,
-        func.date(Shift.started_at) <= ed,
-    ).all()
-    km_free = sum((Decimal(str(s.km_free or 0)) for s in shifts), Decimal("0"))
-
     # km occupied = distance_km from prima trips (columna "km" del archivo Prima)
-    # km free = km_free from shifts (columna "km_free" del archivo Prima)
+    # km free = km_free from prima trips (columna "km_free" del archivo Prima)
     # total km = km occupied + km free
+    km_free = prima_km_free
     total_km = prima_km + km_free
 
     # --- FreeNow trips (FIXED only) ---

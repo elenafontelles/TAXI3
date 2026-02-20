@@ -1,4 +1,4 @@
-TripNumber;DateTripStart;DateTripEnd;AmountTotalPaid;AmountTips;AmountTolls;PaymentMode;km;TariffsUsed;TripStartLatitude;TripStartLongitude;TripEndLatitude;TripEndLongitude;StartStreet;StartStreetNum;StartCity;EndStreet;EndStreetNum;EndCity;DriverName;License;Time
-T001;27/01/26 9:00;27/01/26 9:12;12,50;0,00;0,00;Efectivo;3,20;T1;41.213100N;2.056400E;41.403700N;2.174400E;Gran Via;100;Barcelona;Diagonal;200;Barcelona;D001;BCN-1234;0:12:00
-T002;27/01/26 11:30;27/01/26 11:48;16,00;1,50;0,00;Tarjeta;4,50;T2;41.380000N;2.140000E;41.385000N;2.189000E;Sants;50;Barcelona;Barceloneta;10;Barcelona;D001;BCN-1234;0:18:00
-T003;27/01/26 16:00;27/01/26 16:08;9,00;0,00;1,20;Efectivo;2,10;T1;;;;;;;;Hospital Clinic;;Barcelona;D002;BCN-5678;0:08:00
+TripNumber;DateTripStart;DateTripEnd;AmountTotalPaid;AmountTips;AmountTolls;PaymentMode;km;TariffsUsed;TripStartLatitude;TripStartLongitude;TripEndLatitude;TripEndLongitude;StartStreet;StartStreetNum;StartCity;EndStreet;EndStreetNum;EndCity;DriverName;License;Time;km_free
+T001;27/01/26 9:00;27/01/26 9:12;12,50;0,00;0,00;Efectivo;3,20;T1;41.213100N;2.056400E;41.403700N;2.174400E;Gran Via;100;Barcelona;Diagonal;200;Barcelona;D001;BCN-1234;0:12:00;1,80
+T002;27/01/26 11:30;27/01/26 11:48;16,00;1,50;0,00;Tarjeta;4,50;T2;41.380000N;2.140000E;41.385000N;2.189000E;Sants;50;Barcelona;Barceloneta;10;Barcelona;D001;BCN-1234;0:18:00;2,30
+T003;27/01/26 16:00;27/01/26 16:08;9,00;0,00;1,20;Efectivo;2,10;T1;;;;;;;;Hospital Clinic;;Barcelona;D002;BCN-5678;0:08:00;0,90
