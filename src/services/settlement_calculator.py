@@ -72,10 +72,12 @@ def get_driver_percentage(
 def calculate_daily_settlement(
     prima_amount: Decimal,
     freenow_fixed_bruto: Decimal,
+    freenow_fixed_tips: Decimal,
     uber_t3_fixed: Decimal,
     incidents_amount: Decimal,
     tpv_visa_total: Decimal,
     freenow_app_paid_bruto: Decimal,
+    freenow_app_tips: Decimal,
     uber_total_payment: Decimal,
     fuel_total: Decimal,
     other_expenses_total: Decimal,
@@ -86,10 +88,12 @@ def calculate_daily_settlement(
     Args:
         prima_amount: Prima taxi meter earnings
         freenow_fixed_bruto: FreeNow FIXED fare gross amount (adds to recaudacion)
+        freenow_fixed_tips: FreeNow FIXED tips (added after commission)
         uber_t3_fixed: Uber T3 fixed amount (adds to recaudacion)
         incidents_amount: Total incident amounts to deduct
         tpv_visa_total: Total TPV/VISA daily total
         freenow_app_paid_bruto: FreeNow APP-paid FIXED fare gross (paid by app)
+        freenow_app_tips: FreeNow APP-paid FIXED tips (added after commission)
         uber_total_payment: Uber total payment (paid by app)
         fuel_total: Total fuel expenses
         other_expenses_total: Total other expenses
@@ -104,12 +108,13 @@ def calculate_daily_settlement(
         Dict with all settlement values
     """
     # 1. FreeNow fixed: net or bruto depending on who pays the commission
+    #    Tips are added AFTER commission deduction (no commission on tips)
     _fn_pct_raw = driver_config.get("freenow_commission_driver_pct") or 0
     freenow_commission_driver_pct = Decimal(str(_fn_pct_raw))
     if freenow_commission_driver_pct > 0:
-        freenow_fixed = calculate_freenow_net(freenow_fixed_bruto)
+        freenow_fixed = calculate_freenow_net(freenow_fixed_bruto) + freenow_fixed_tips
     else:
-        freenow_fixed = freenow_fixed_bruto
+        freenow_fixed = freenow_fixed_bruto + freenow_fixed_tips
 
     # Recaudacion total = prima + freenow_fixed (net or bruto) + uber_t3_fixed
     recaudacion_total = prima_amount + freenow_fixed + uber_t3_fixed
@@ -137,10 +142,11 @@ def calculate_daily_settlement(
     ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
     # 7. FreeNow APP: si comision driver = 0, propietario asume comision
+    #    Tips added AFTER commission (no commission on tips)
     if freenow_commission_driver_pct == 0:
-        freenow_app = freenow_app_paid_bruto
+        freenow_app = freenow_app_paid_bruto + freenow_app_tips
     else:
-        freenow_app = calculate_freenow_net(freenow_app_paid_bruto)
+        freenow_app = calculate_freenow_net(freenow_app_paid_bruto) + freenow_app_tips
 
     # 8. Anticipado = recaudacion_neta - tpv_visa - freenow_app - uber_total_payment
     #               - otros_gastos - gasolina (si fuel_deducted_from_driver)

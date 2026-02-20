@@ -146,17 +146,30 @@ def _get_daily_data(session: Session, driver_id: str, vehicle: Vehicle | None,
 
     # FreeNow bruto that adds to recaudacion:
     # Only FIXED fare trips (METERED goes through taximeter/prima)
-    # Includes tips (TOUR TIP) as absolute value
     freenow_fixed_bruto = sum(
-        Decimal(str(t.gross_amount or 0)) + abs(Decimal(str(t.tips or 0)))
+        Decimal(str(t.gross_amount or 0))
+        for t in freenow_trips
+        if t.fare_type != "METERED"
+    )
+
+    # FreeNow tips (TOUR TIP) — added AFTER commission deduction
+    freenow_fixed_tips = sum(
+        abs(Decimal(str(t.tips or 0)))
         for t in freenow_trips
         if t.fare_type != "METERED"
     )
 
     # FreeNow APP-paid bruto (paid via app, not cash)
-    # Includes tips (TOUR TIP) as absolute value
     freenow_app_paid_bruto = sum(
-        Decimal(str(t.gross_amount or 0)) + abs(Decimal(str(t.tips or 0)))
+        Decimal(str(t.gross_amount or 0))
+        for t in freenow_trips
+        if t.fare_type != "METERED"
+        and t.payment_method in ("APP", "tarjeta")
+    )
+
+    # FreeNow APP-paid tips
+    freenow_app_tips = sum(
+        abs(Decimal(str(t.tips or 0)))
         for t in freenow_trips
         if t.fare_type != "METERED"
         and t.payment_method in ("APP", "tarjeta")
@@ -217,10 +230,12 @@ def _get_daily_data(session: Session, driver_id: str, vehicle: Vehicle | None,
     return {
         "prima_amount": prima_amount,
         "freenow_fixed_bruto": freenow_fixed_bruto,
+        "freenow_fixed_tips": freenow_fixed_tips,
         "uber_t3_fixed": uber_t3_fixed,
         "incidents_amount": incidents_amount,
         "tpv_visa_total": tpv_visa_total,
         "freenow_app_paid_bruto": freenow_app_paid_bruto,
+        "freenow_app_tips": freenow_app_tips,
         "uber_total_payment": uber_total_payment,
         "fuel_total": fuel_total,
         "other_expenses_total": other_expenses_total,
