@@ -27,7 +27,7 @@ def _get_uber_summaries(session, sd, ed, driver_id, drivers_list):
     # If filtering by driver, resolve to license_number/vehicle_id
     if driver_id:
         driver = session.get(Driver, driver_id)
-        if driver:
+        if driver and driver.license_number:
             lic = driver.license_number.strip()
             lic_num = lic.split(" - ")[0].strip() if " - " in lic else lic
             q = q.filter(UberDailySummary.license_number == lic_num)
@@ -39,6 +39,8 @@ def _get_uber_summaries(session, sd, ed, driver_id, drivers_list):
     # Build license_number -> driver name map
     lic_to_driver = {}
     for d in drivers_list:
+        if not d.license_number:
+            continue
         lic = d.license_number.strip()
         lic_num = lic.split(" - ")[0].strip() if " - " in lic else lic
         lic_to_driver[lic_num] = d.name
@@ -115,9 +117,11 @@ async def trips_page(
             # Skip uber Trip records (stale data from before parser rewrite)
             if t.source == "uber":
                 continue
+            # Normalize sort_key to naive datetime for consistent sorting
+            sk = t.started_at.replace(tzinfo=None) if t.started_at.tzinfo else t.started_at
             trips.append({
                 "started_at": t.started_at.strftime("%d/%m/%Y %H:%M"),
-                "sort_key": t.started_at,
+                "sort_key": sk,
                 "source": t.source,
                 "driver_name": driver_cache.get(t.driver_id, "Desconocido"),
                 "gross_amount": f"{t.gross_amount:.2f}",
