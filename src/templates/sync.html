@@ -58,14 +58,11 @@
     {% endfor %}
 </div>
 
-<!-- Sync FreeNow form -->
+<!-- Sync FreeNow 092/1061 form -->
 <div class="card mb-4">
     <div class="card-header d-flex justify-content-between align-items-center">
-        <h6 class="mb-0">Sincronizar FreeNow</h6>
-        <span>
-            <span class="badge bg-success">Scraper activo</span>
-            <span class="badge bg-info">{{ freenow_accounts }} cuenta{{ 's' if freenow_accounts != 1 else '' }}</span>
-        </span>
+        <h6 class="mb-0">Sincronizar FreeNow 092 y 1061</h6>
+        <span class="badge bg-success">Scraper activo</span>
     </div>
     <div class="card-body">
         <form method="post" action="{{ root_path }}/sync/freenow" class="row g-2 align-items-end">
@@ -82,11 +79,42 @@
             <div class="col-md-3">
                 <button type="submit" class="btn btn-success btn-sm"
                         {% if has_running_sync %}disabled{% endif %}>
-                    {% if has_running_sync %}Sincronizando...{% else %}Sincronizar FreeNow{% endif %}
+                    {% if has_running_sync %}Sincronizando...{% else %}Sincronizar{% endif %}
                 </button>
             </div>
             <div class="col-md-3">
-                <p class="small text-muted mb-0">Descarga CSV de todas las cuentas FreeNow configuradas y los importa automaticamente.</p>
+                <p class="small text-muted mb-0">Descarga CSV del portal FreeNow (licencias 092 y 1061).</p>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Sync FreeNow 361 form -->
+<div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h6 class="mb-0">Sincronizar FreeNow 361</h6>
+        <span class="badge bg-success">Scraper activo</span>
+    </div>
+    <div class="card-body">
+        <form method="post" action="{{ root_path }}/sync/freenow-361" class="row g-2 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label small">Fecha inicio</label>
+                <input type="date" class="form-control form-control-sm" name="start_date"
+                       value="{{ default_start }}">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small">Fecha fin</label>
+                <input type="date" class="form-control form-control-sm" name="end_date"
+                       value="{{ default_end }}">
+            </div>
+            <div class="col-md-3">
+                <button type="submit" class="btn btn-success btn-sm"
+                        {% if has_running_sync %}disabled{% endif %}>
+                    {% if has_running_sync %}Sincronizando...{% else %}Sincronizar{% endif %}
+                </button>
+            </div>
+            <div class="col-md-3">
+                <p class="small text-muted mb-0">Descarga CSV del portal FreeNow (licencia 361).</p>
             </div>
         </form>
     </div>

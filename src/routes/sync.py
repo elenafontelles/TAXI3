@@ -15,7 +15,6 @@ from scripts.parsers.prima_parser import parse_prima_csv
 from src.routes.upload import _build_lookups, _resolve_driver_vehicle, TRIP_FIELDS
 from src.template_config import templates, root_path
 from src.services.job_service import enqueue_sync
-from src.config import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -104,7 +103,6 @@ async def sync_page(request: Request, user: dict = Depends(require_admin), sessi
 
     yesterday = (date.today() - timedelta(days=1)).isoformat()
     week_ago = (date.today() - timedelta(days=7)).isoformat()
-    freenow_accounts = len(get_settings().get_freenow_accounts())
     return templates.TemplateResponse(request, "sync.html", {
         "user": user,
         "platform_status": platform_status,
@@ -113,7 +111,6 @@ async def sync_page(request: Request, user: dict = Depends(require_admin), sessi
         "has_running_sync": has_running_sync,
         "default_start": week_ago,
         "default_end": yesterday,
-        "freenow_accounts": freenow_accounts,
     })
 
 
@@ -125,6 +122,7 @@ async def sync_freenow(
     end_date: str = Form(""),
     session: Session = Depends(get_session),
 ):
+    """Sync FreeNow account 1 (licenses 092 and 1061)."""
     # Guard against double-runs
     already_running = (session.query(SyncLog)
                        .filter_by(source="freenow", status="running")
@@ -132,7 +130,6 @@ async def sync_freenow(
     if already_running:
         return RedirectResponse(url=f"{root_path}/sync", status_code=303)
 
-    # Parse dates (default: yesterday)
     yesterday = date.today() - timedelta(days=1)
     sd = date.fromisoformat(start_date) if start_date else yesterday
     ed = date.fromisoformat(end_date) if end_date else sd
@@ -145,11 +142,40 @@ async def sync_freenow(
     )
     session.add(log)
     session.commit()
-    log_id = log.id
 
-    # Enqueue job to Redis (processed by Arq worker)
-    await enqueue_sync("freenow", log_id, sd, ed)
+    await enqueue_sync("freenow", log.id, sd, ed, account_label="account1")
+    return RedirectResponse(url=f"{root_path}/sync", status_code=303)
 
+
+@router.post("/sync/freenow-361", response_class=HTMLResponse)
+async def sync_freenow_361(
+    request: Request,
+    user: dict = Depends(require_admin),
+    start_date: str = Form(""),
+    end_date: str = Form(""),
+    session: Session = Depends(get_session),
+):
+    """Sync FreeNow account 2 (license 361)."""
+    already_running = (session.query(SyncLog)
+                       .filter_by(source="freenow", status="running")
+                       .first())
+    if already_running:
+        return RedirectResponse(url=f"{root_path}/sync", status_code=303)
+
+    yesterday = date.today() - timedelta(days=1)
+    sd = date.fromisoformat(start_date) if start_date else yesterday
+    ed = date.fromisoformat(end_date) if end_date else sd
+
+    log = SyncLog(
+        source="freenow",
+        sync_type="scraper",
+        status="running",
+        started_at=datetime.now(timezone.utc),
+    )
+    session.add(log)
+    session.commit()
+
+    await enqueue_sync("freenow", log.id, sd, ed, account_label="account2")
     return RedirectResponse(url=f"{root_path}/sync", status_code=303)
 
 

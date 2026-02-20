@@ -10,7 +10,8 @@ from src.workers.settings import get_redis_settings
 logger = logging.getLogger(__name__)
 
 
-async def enqueue_sync(source: str, log_id: int, start_date: date, end_date: date) -> str:
+async def enqueue_sync(source: str, log_id: int, start_date: date, end_date: date,
+                       account_label: str = "") -> str:
     """Enqueue a sync job for the given source.
 
     Args:
@@ -18,6 +19,7 @@ async def enqueue_sync(source: str, log_id: int, start_date: date, end_date: dat
         log_id: SyncLog record ID
         start_date: Start date for sync
         end_date: End date for sync
+        account_label: Optional account label (for multi-account platforms)
 
     Returns:
         Job ID string
@@ -30,8 +32,9 @@ async def enqueue_sync(source: str, log_id: int, start_date: date, end_date: dat
             log_id,
             start_date.isoformat(),
             end_date.isoformat(),
+            account_label,
         )
-        logger.info(f"Enqueued {task_name} job {job.job_id} for log_id={log_id}")
+        logger.info(f"Enqueued {task_name} job {job.job_id} for log_id={log_id} account={account_label or 'default'}")
         return job.job_id
     finally:
         await redis.close()

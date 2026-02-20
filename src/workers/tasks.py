@@ -12,14 +12,16 @@ from src.models.sync_log import SyncLog
 logger = logging.getLogger(__name__)
 
 
-async def sync_freenow(ctx, log_id: int, start_date: str, end_date: str):
-    """Run FreeNow scraper for all configured accounts and import results.
+async def sync_freenow(ctx, log_id: int, start_date: str, end_date: str,
+                       account_label: str = ""):
+    """Run FreeNow scraper for a specific account and import results.
 
     Args:
         ctx: Arq context (contains redis connection)
         log_id: SyncLog record ID to update
         start_date: ISO format date string
         end_date: ISO format date string
+        account_label: Account label ('account1' or 'account2')
 
     Returns:
         Dict with status and record counts
@@ -43,67 +45,51 @@ async def sync_freenow(ctx, log_id: int, start_date: str, end_date: str):
         from src.routes.sync import _import_freenow_csv
 
         accounts = get_settings().get_freenow_accounts()
-        if not accounts:
+        account = next((a for a in accounts if a["label"] == account_label), None)
+        if not account:
+            # Fallback: use first account if no label match
+            account = accounts[0] if accounts else None
+        if not account:
             log.status = "error"
-            log.error_message = "No hay cuentas FreeNow configuradas en .env"
+            log.error_message = f"Cuenta FreeNow '{account_label}' no configurada en .env"
             log.completed_at = datetime.now(timezone.utc)
             log.duration_seconds = (log.completed_at - started_at).total_seconds()
             session.commit()
             return {"status": "error", "message": log.error_message}
 
-        total_created = total_skipped = total_unmatched = 0
-        errors = []
+        logger.info(f"FreeNow sync: running scraper for {account['label']}")
+        scraper = FreeNowScraper(
+            start_date=sd, end_date=ed,
+            email=account["email"], password=account["password"],
+            account_label=account["label"],
+        )
+        csv_path = await asyncio.to_thread(scraper.run)
 
-        for account in accounts:
-            label = account["label"]
-            logger.info(f"FreeNow sync: running scraper for {label}")
+        if not csv_path:
+            log.status = "error"
+            log.error_message = "No se pudo descargar el CSV (sin datos o credenciales incorrectas)"
+            log.completed_at = datetime.now(timezone.utc)
+            log.duration_seconds = (log.completed_at - started_at).total_seconds()
+            session.commit()
+            return {"status": "error", "message": log.error_message}
 
-            scraper = FreeNowScraper(
-                start_date=sd, end_date=ed,
-                email=account["email"], password=account["password"],
-                account_label=label,
-            )
-            csv_path = await asyncio.to_thread(scraper.run)
+        created, skipped, unmatched = _import_freenow_csv(csv_path, session)
 
-            if not csv_path:
-                errors.append(f"{label}: no CSV descargado")
-                logger.warning(f"FreeNow {label}: scraper returned no CSV")
-                continue
-
-            created, skipped, unmatched = _import_freenow_csv(csv_path, session)
-            total_created += created
-            total_skipped += skipped
-            total_unmatched += unmatched
-            logger.info(f"FreeNow {label}: {created} created, {skipped} skipped, {unmatched} unmatched")
-
-        # Update log with aggregated results
-        log.records_found = total_created + total_skipped + total_unmatched
-        log.records_created = total_created
-        log.records_skipped = total_skipped
+        log.status = "success"
+        log.records_found = created + skipped + unmatched
+        log.records_created = created
+        log.records_skipped = skipped
         log.completed_at = datetime.now(timezone.utc)
         log.duration_seconds = (log.completed_at - started_at).total_seconds()
-
-        messages = []
-        if total_unmatched:
-            messages.append(f"{total_unmatched} viajes sin conductor/vehiculo asignado")
-        if errors:
-            messages.extend(errors)
-
-        if errors and total_created == 0:
-            log.status = "error"
-            log.error_message = "; ".join(messages) if messages else "Fallo en todas las cuentas"
-        else:
-            log.status = "success"
-            if messages:
-                log.error_message = "; ".join(messages)
-
+        if unmatched:
+            log.error_message = f"{unmatched} viajes sin conductor/vehiculo asignado"
         session.commit()
 
         return {
-            "status": log.status,
-            "created": total_created,
-            "skipped": total_skipped,
-            "unmatched": total_unmatched,
+            "status": "success",
+            "created": created,
+            "skipped": skipped,
+            "unmatched": unmatched,
         }
 
     except Exception as e:
@@ -279,28 +265,39 @@ async def scheduled_gap_check(ctx):
 
 
 async def scheduled_sync_freenow(ctx):
-    """Cron job: sync FreeNow for yesterday's data."""
+    """Cron job: sync FreeNow for yesterday's data (all configured accounts)."""
     yesterday = date.today() - timedelta(days=1)
     logger.info(f"Scheduled FreeNow sync for {yesterday}")
 
-    engine = get_engine()
-    SessionLocal = sessionmaker(bind=engine)
-    session = SessionLocal()
+    from src.config import get_settings
+    accounts = get_settings().get_freenow_accounts()
 
-    try:
-        log = SyncLog(
-            source="freenow",
-            sync_type="scheduled",
-            status="running",
-            started_at=datetime.now(timezone.utc),
+    results = []
+    for account in accounts:
+        engine = get_engine()
+        SessionLocal = sessionmaker(bind=engine)
+        session = SessionLocal()
+
+        try:
+            log = SyncLog(
+                source="freenow",
+                sync_type="scheduled",
+                status="running",
+                started_at=datetime.now(timezone.utc),
+            )
+            session.add(log)
+            session.commit()
+            log_id = log.id
+        finally:
+            session.close()
+
+        result = await sync_freenow(
+            ctx, log_id, yesterday.isoformat(), yesterday.isoformat(),
+            account["label"],
         )
-        session.add(log)
-        session.commit()
-        log_id = log.id
-    finally:
-        session.close()
+        results.append(result)
 
-    return await sync_freenow(ctx, log_id, yesterday.isoformat(), yesterday.isoformat())
+    return results
 
 
 async def scheduled_sync_prima(ctx):
