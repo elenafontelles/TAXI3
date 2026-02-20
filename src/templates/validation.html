@@ -2,6 +2,31 @@
 {% block title %}Validacion - TAXI API{% endblock %}
 {% block content %}
 <h4>Cola de Validacion</h4>
+
+<div class="card mb-4">
+    <div class="card-header">Filtrar por fecha</div>
+    <div class="card-body">
+        <form method="get" action="{{ root_path }}/validacion">
+            <div class="row mb-3">
+                <div class="col-md-3">
+                    <label for="start_date" class="form-label">Fecha inicio</label>
+                    <input type="date" class="form-control" id="start_date" name="start_date"
+                           value="{{ start_date }}" required>
+                </div>
+                <div class="col-md-3">
+                    <label for="end_date" class="form-label">Fecha fin</label>
+                    <input type="date" class="form-control" id="end_date" name="end_date"
+                           value="{{ end_date }}" required>
+                </div>
+                <div class="col-md-2 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary w-100">Filtrar</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% if start_date and end_date %}
 <p class="text-muted">{{ total_pending }} incidencia(s) pendiente(s)</p>
 
 <div class="card">
@@ -48,6 +73,8 @@
                     </td>
                     <td>
                         <form action="{{ root_path }}/validacion/{{ pv.id }}/resolve" method="post" class="d-inline">
+                            <input type="hidden" name="start_date" value="{{ start_date }}">
+                            <input type="hidden" name="end_date" value="{{ end_date }}">
                             <button type="submit" name="action" value="valid" class="btn btn-sm btn-success">Valido</button>
                             <button type="submit" name="action" value="invalid" class="btn btn-sm btn-danger">Invalido</button>
                         </form>
@@ -57,8 +84,9 @@
             </tbody>
         </table>
         {% else %}
-        <p class="text-muted mb-0">No hay incidencias pendientes.</p>
+        <p class="text-muted mb-0">No hay incidencias pendientes en este periodo.</p>
         {% endif %}
     </div>
 </div>
+{% endif %}
 {% endblock %}
