@@ -44,35 +44,19 @@
                 </tr>
             </thead>
             <tbody>
-                {% for pv in incidents %}
+                {% for item in incidents %}
                 <tr>
+                    <td>{{ item.trip.started_at.strftime('%d/%m/%Y %H:%M') }}</td>
+                    <td>{{ incident_vehicles.get(item.pv.id, '—') }}</td>
+                    <td>{{ "%.2f"|format(item.trip.gross_amount or 0) }} EUR</td>
                     <td>
-                        {% if incident_trips.get(pv.id) %}
-                        {{ incident_trips[pv.id].started_at.strftime('%d/%m/%Y %H:%M') }}
-                        {% else %}
-                        —
-                        {% endif %}
-                    </td>
-                    <td>{{ incident_vehicles.get(pv.id, '—') }}</td>
-                    <td>
-                        {% if incident_trips.get(pv.id) %}
-                        {{ "%.2f"|format(incident_trips[pv.id].gross_amount or 0) }} EUR
-                        {% else %}
-                        —
-                        {% endif %}
-                    </td>
-                    <td>
-                        {% if pv.details %}
                         <small>
-                            dist: {{ pv.details.get('distance_km', '—') }} km,
-                            dur: {{ pv.details.get('duration_minutes', '—') }} min
+                            dist: {{ item.trip.distance_km or 0 }} km,
+                            dur: {{ item.trip.duration_minutes or 0 }} min
                         </small>
-                        {% else %}
-                        —
-                        {% endif %}
                     </td>
                     <td>
-                        <form action="{{ root_path }}/validacion/{{ pv.id }}/resolve" method="post" class="d-inline">
+                        <form action="{{ root_path }}/validacion/{{ item.pv.id }}/resolve" method="post" class="d-inline">
                             <input type="hidden" name="start_date" value="{{ start_date }}">
                             <input type="hidden" name="end_date" value="{{ end_date }}">
                             <button type="submit" name="action" value="valid" class="btn btn-sm btn-success">Valido</button>

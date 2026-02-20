@@ -1,8 +1,9 @@
 # src/routes/validation.py
-from datetime import date, datetime
+from datetime import date, datetime, time, timedelta, timezone
 from fastapi import APIRouter, Request, Depends, Form
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
+from sqlalchemy import and_
 from src.routes.auth import require_admin
 from src.database import get_session
 from src.models.pending_validation import PendingValidation
@@ -21,42 +22,63 @@ async def validation_page(
     user: dict = Depends(require_admin),
     session: Session = Depends(get_session),
 ):
-    incidents = session.query(PendingValidation).filter_by(
-        validation_type="incident", status="pending"
-    ).all()
-
-    # Parse date filters
     sd = date.fromisoformat(start_date) if start_date else None
     ed = date.fromisoformat(end_date) if end_date else None
 
-    incident_trips = {}
+    incidents = []
     incident_vehicles = {}
-    filtered_incidents = []
-    for pv in incidents:
-        if pv.trip_id:
-            trip = session.get(Trip, pv.trip_id)
-            if trip and float(trip.gross_amount or 0) != 0:
-                # Filter by date range using trip started_at
-                trip_date = trip.started_at.date() if trip.started_at else None
-                if sd and trip_date and trip_date < sd:
-                    continue
-                if ed and trip_date and trip_date > ed:
-                    continue
-                incident_trips[pv.id] = trip
-                if trip.vehicle_id:
-                    vehicle = session.get(Vehicle, trip.vehicle_id)
-                    if vehicle:
-                        incident_vehicles[pv.id] = vehicle.plate
-                filtered_incidents.append(pv)
+
+    if sd and ed:
+        # Query trips directly: incident criteria + date range + non-zero amount
+        trips = session.query(Trip).filter(
+            Trip.source == "prima",
+            Trip.distance_km == 0,
+            Trip.duration_minutes < 0.5,
+            Trip.gross_amount != 0,
+            Trip.started_at >= datetime.combine(sd, time.min),
+            Trip.started_at < datetime.combine(ed + timedelta(days=1), time.min),
+        ).order_by(Trip.started_at).all()
+
+        # Get existing PendingValidation status for each trip
+        for trip in trips:
+            pv = session.query(PendingValidation).filter_by(
+                trip_id=trip.id, validation_type="incident"
+            ).first()
+
+            # Skip already resolved (valid or invalid)
+            if pv and pv.status in ("valid", "invalid"):
+                continue
+
+            # Create PendingValidation if it doesn't exist yet
+            if not pv:
+                pv = PendingValidation(
+                    trip_id=trip.id,
+                    validation_type="incident",
+                    status="pending",
+                    details={
+                        "distance_km": float(trip.distance_km or 0),
+                        "duration_minutes": float(trip.duration_minutes or 0),
+                    },
+                )
+                session.add(pv)
+                session.flush()
+
+            incidents.append({"pv": pv, "trip": trip})
+
+            if trip.vehicle_id:
+                vehicle = session.get(Vehicle, trip.vehicle_id)
+                if vehicle:
+                    incident_vehicles[pv.id] = vehicle.plate
+
+        session.commit()
 
     return templates.TemplateResponse(request, "validation.html", {
         "user": user,
         "start_date": start_date,
         "end_date": end_date,
-        "incidents": filtered_incidents,
-        "incident_trips": incident_trips,
+        "incidents": incidents,
         "incident_vehicles": incident_vehicles,
-        "total_pending": len(filtered_incidents),
+        "total_pending": len(incidents),
     })
 
 
@@ -70,7 +92,6 @@ async def resolve_validation(
     user: dict = Depends(require_admin),
     session: Session = Depends(get_session),
 ):
-    from datetime import timezone
     pv = session.get(PendingValidation, validation_id)
     if not pv:
         return RedirectResponse(url=f"{root_path}/validacion", status_code=303)
