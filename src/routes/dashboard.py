@@ -131,14 +131,9 @@ def _get_driver_kpis(session: Session, driver: Driver, sd: date, ed: date) -> di
     pct_freenow = (freenow_t3_net / total_rec_neta * 100) if total_rec_neta > 0 else Decimal("0.00")
     pct_uber = (uber_t3 / total_rec_neta * 100) if total_rec_neta > 0 else Decimal("0.00")
 
-    # --- Fuel ---
-    fuel_rows = session.query(FuelExpense).filter(
-        FuelExpense.driver_id == driver_id,
-        FuelExpense.date >= sd,
-        FuelExpense.date <= ed,
-    ).all()
-    # If no fuel by driver_id, try by vehicle
-    if not fuel_rows and lic_num:
+    # --- Fuel (query by vehicle, since fuel records always have vehicle_id) ---
+    fuel_rows = []
+    if lic_num:
         from src.models.vehicle import Vehicle
         vehicle = session.query(Vehicle).filter(
             Vehicle.license_number == lic_num, Vehicle.is_active == True
@@ -149,6 +144,13 @@ def _get_driver_kpis(session: Session, driver: Driver, sd: date, ed: date) -> di
                 FuelExpense.date >= sd,
                 FuelExpense.date <= ed,
             ).all()
+    # Fallback: try by driver_id
+    if not fuel_rows:
+        fuel_rows = session.query(FuelExpense).filter(
+            FuelExpense.driver_id == driver_id,
+            FuelExpense.date >= sd,
+            FuelExpense.date <= ed,
+        ).all()
 
     fuel_cost = sum((Decimal(str(f.amount or 0)) for f in fuel_rows), Decimal("0"))
     fuel_liters = sum((Decimal(str(f.liters or 0)) for f in fuel_rows), Decimal("0"))
@@ -194,7 +196,9 @@ async def dashboard(
     today = date.today()
     start_of_month = today.replace(day=1)
 
-    drivers = session.query(Driver).filter_by(is_active=True).order_by(Driver.name).all()
+    drivers = session.query(Driver).filter(
+        Driver.is_active == True, Driver.is_owner == False
+    ).order_by(Driver.name).all()
 
     driver_kpis = []
     for d in drivers:
