@@ -139,10 +139,15 @@ def _get_driver_kpis(session: Session, driver: Driver, sd: date, ed: date) -> di
     # --- Fuel (query by vehicle plate, since fuel is matched by matricula) ---
     fuel_rows = []
     if plate:
+        import re
         from src.models.vehicle import Vehicle
-        vehicle = session.query(Vehicle).filter(
-            Vehicle.plate == plate, Vehicle.is_active == True
-        ).first()
+        norm_plate = re.sub(r"[\s\-\.]", "", plate).upper()
+        # Match vehicle by normalized plate
+        vehicles = session.query(Vehicle).filter(Vehicle.is_active == True).all()
+        vehicle = next(
+            (v for v in vehicles if re.sub(r"[\s\-\.]", "", v.plate).upper() == norm_plate),
+            None
+        )
         if vehicle:
             fuel_rows = session.query(FuelExpense).filter(
                 FuelExpense.vehicle_id == vehicle.id,

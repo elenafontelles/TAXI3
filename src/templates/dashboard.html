@@ -47,7 +47,6 @@
                         <th>EUR/km</th>
                         <th>EUR/viaje</th>
                         <th>Prom.Diario</th>
-                        <th>Ocup.%</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -65,7 +64,6 @@
                         <td>{{ "%.2f"|format(d.eur_per_km) }}</td>
                         <td>{{ "%.2f"|format(d.eur_per_viaje) }}</td>
                         <td class="fw-bold">{{ "%.2f"|format(d.promedio_diario) }}</td>
-                        <td>{{ "%.1f"|format(d.tasa_ocupacion) }}%</td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -79,6 +77,35 @@
     <div class="card-header">Recaudacion Neta por Conductor</div>
     <div class="card-body">
         <canvas id="revenueChart" height="80"></canvas>
+    </div>
+</div>
+
+<!-- Km & Occupancy Table -->
+<div class="card mb-4">
+    <div class="card-header">Kilometraje y Ocupacion — Este Mes</div>
+    <div class="card-body p-0">
+        <table class="table table-striped table-hover kpi-table mb-0">
+            <thead class="table-dark">
+                <tr>
+                    <th>Conductor</th>
+                    <th>Km Ocupados</th>
+                    <th>Km Free</th>
+                    <th>Km Totales</th>
+                    <th>% Ocupacion</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for d in driver_kpis %}
+                <tr>
+                    <td>{{ d.driver_name }}</td>
+                    <td>{{ "%.1f"|format(d.km_occupied) }}</td>
+                    <td>{{ "%.1f"|format(d.km_free) }}</td>
+                    <td class="fw-bold">{{ "%.1f"|format(d.km) }}</td>
+                    <td class="fw-bold">{{ "%.1f"|format(d.tasa_ocupacion) }}%</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
     </div>
 </div>
 
