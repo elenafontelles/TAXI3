@@ -438,8 +438,23 @@ async def _process_lacaixa(request, user, vehicle_id, csv_file, session):
 
     lookups = _build_lookups(session)
     source_file = csv_file.filename or "lacaixa_upload"
+
+    # Determine date range and license numbers from parsed records
+    license_numbers = {rec["license_number"] for rec in records}
+    date_min = min(rec["date"] for rec in records)
+    date_max = max(rec["date"] for rec in records)
+
+    # Delete existing records in this range for these licenses
+    # (ensures stale records from previous uploads are removed)
+    deleted = 0
+    for lic in license_numbers:
+        deleted += session.query(TpvDailyTotal).filter(
+            TpvDailyTotal.license_number == lic,
+            TpvDailyTotal.date >= date_min,
+            TpvDailyTotal.date <= date_max,
+        ).delete()
+
     created = 0
-    updated = 0
     unmatched = 0
 
     for rec in records:
@@ -456,30 +471,21 @@ async def _process_lacaixa(request, user, vehicle_id, csv_file, session):
             unmatched += 1
             continue
 
-        # Upsert by date + license_number
-        existing = session.query(TpvDailyTotal).filter_by(
+        total = TpvDailyTotal(
             date=rec["date"],
+            vehicle_id=rec_vehicle,
             license_number=rec["license_number"],
-        ).first()
-        if existing:
-            existing.vehicle_id = rec_vehicle
-            existing.amount = rec["amount"]
-            existing.source_file = source_file
-            updated += 1
-        else:
-            total = TpvDailyTotal(
-                date=rec["date"],
-                vehicle_id=rec_vehicle,
-                license_number=rec["license_number"],
-                amount=rec["amount"],
-                source_file=source_file,
-            )
-            session.add(total)
-            created += 1
+            amount=rec["amount"],
+            source_file=source_file,
+        )
+        session.add(total)
+        created += 1
 
     session.commit()
 
-    msg = f"Totales TPV importados: {created} nuevos, {updated} actualizados."
+    msg = f"Totales TPV importados: {created} nuevos."
+    if deleted:
+        msg += f" {deleted} registros anteriores reemplazados."
     if unmatched:
         msg += f" Sin vehiculo asignado: {unmatched}."
     return await _render_result(request, session, user, success=msg)
