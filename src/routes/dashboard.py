@@ -18,16 +18,28 @@ router = APIRouter()
 
 
 def _extract_license_number(driver: Driver) -> str | None:
+    """Extract taxi license number (e.g. '361' from '361 - 0397MSS')."""
     if not driver.license_number:
         return None
     lic = driver.license_number.strip()
     return lic.split(" - ")[0].strip() if " - " in lic else lic
 
 
+def _extract_plate(driver: Driver) -> str | None:
+    """Extract vehicle plate (e.g. '0397MSS' from '361 - 0397MSS')."""
+    if not driver.license_number:
+        return None
+    lic = driver.license_number.strip()
+    if " - " in lic:
+        return lic.split(" - ")[1].strip()
+    return None
+
+
 def _get_driver_kpis(session: Session, driver: Driver, sd: date, ed: date) -> dict:
     """Calculate monthly KPIs for a single driver."""
     driver_id = driver.id
     lic_num = _extract_license_number(driver)
+    plate = _extract_plate(driver)
 
     # --- Prima trips ---
     prima_trips = session.query(Trip).filter(
@@ -124,12 +136,12 @@ def _get_driver_kpis(session: Session, driver: Driver, sd: date, ed: date) -> di
     pct_freenow = (freenow_t3_net / total_rec_neta * 100) if total_rec_neta > 0 else Decimal("0.00")
     pct_uber = (uber_t3 / total_rec_neta * 100) if total_rec_neta > 0 else Decimal("0.00")
 
-    # --- Fuel (query by vehicle, since fuel records always have vehicle_id) ---
+    # --- Fuel (query by vehicle plate, since fuel is matched by matricula) ---
     fuel_rows = []
-    if lic_num:
+    if plate:
         from src.models.vehicle import Vehicle
         vehicle = session.query(Vehicle).filter(
-            Vehicle.license_number == lic_num, Vehicle.is_active == True
+            Vehicle.plate == plate, Vehicle.is_active == True
         ).first()
         if vehicle:
             fuel_rows = session.query(FuelExpense).filter(
