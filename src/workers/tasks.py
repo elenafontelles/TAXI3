@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 
 async def sync_freenow(ctx, log_id: int, start_date: str, end_date: str):
-    """Run FreeNow scraper and import results.
+    """Run FreeNow scraper for all configured accounts and import results.
 
     Args:
         ctx: Arq context (contains redis connection)
@@ -38,38 +38,72 @@ async def sync_freenow(ctx, log_id: int, start_date: str, end_date: str):
         sd = date.fromisoformat(start_date)
         ed = date.fromisoformat(end_date)
 
-        # Run scraper in a thread (Playwright sync API can't run inside asyncio loop)
+        from src.config import get_settings
         from scrapers.freenow_scraper import FreeNowScraper
-        scraper = FreeNowScraper(start_date=sd, end_date=ed)
-        csv_path = await asyncio.to_thread(scraper.run)
+        from src.routes.sync import _import_freenow_csv
 
-        if not csv_path:
+        accounts = get_settings().get_freenow_accounts()
+        if not accounts:
             log.status = "error"
-            log.error_message = "No se pudo descargar el CSV (sin datos o credenciales incorrectas)"
+            log.error_message = "No hay cuentas FreeNow configuradas en .env"
             log.completed_at = datetime.now(timezone.utc)
             log.duration_seconds = (log.completed_at - started_at).total_seconds()
             session.commit()
             return {"status": "error", "message": log.error_message}
 
-        # Import the CSV
-        from src.routes.sync import _import_freenow_csv
-        created, skipped, unmatched = _import_freenow_csv(csv_path, session)
+        total_created = total_skipped = total_unmatched = 0
+        errors = []
 
-        log.status = "success"
-        log.records_found = created + skipped + unmatched
-        log.records_created = created
-        log.records_skipped = skipped
+        for account in accounts:
+            label = account["label"]
+            logger.info(f"FreeNow sync: running scraper for {label}")
+
+            scraper = FreeNowScraper(
+                start_date=sd, end_date=ed,
+                email=account["email"], password=account["password"],
+                account_label=label,
+            )
+            csv_path = await asyncio.to_thread(scraper.run)
+
+            if not csv_path:
+                errors.append(f"{label}: no CSV descargado")
+                logger.warning(f"FreeNow {label}: scraper returned no CSV")
+                continue
+
+            created, skipped, unmatched = _import_freenow_csv(csv_path, session)
+            total_created += created
+            total_skipped += skipped
+            total_unmatched += unmatched
+            logger.info(f"FreeNow {label}: {created} created, {skipped} skipped, {unmatched} unmatched")
+
+        # Update log with aggregated results
+        log.records_found = total_created + total_skipped + total_unmatched
+        log.records_created = total_created
+        log.records_skipped = total_skipped
         log.completed_at = datetime.now(timezone.utc)
         log.duration_seconds = (log.completed_at - started_at).total_seconds()
-        if unmatched:
-            log.error_message = f"{unmatched} viajes sin conductor/vehiculo asignado"
+
+        messages = []
+        if total_unmatched:
+            messages.append(f"{total_unmatched} viajes sin conductor/vehiculo asignado")
+        if errors:
+            messages.extend(errors)
+
+        if errors and total_created == 0:
+            log.status = "error"
+            log.error_message = "; ".join(messages) if messages else "Fallo en todas las cuentas"
+        else:
+            log.status = "success"
+            if messages:
+                log.error_message = "; ".join(messages)
+
         session.commit()
 
         return {
-            "status": "success",
-            "created": created,
-            "skipped": skipped,
-            "unmatched": unmatched,
+            "status": log.status,
+            "created": total_created,
+            "skipped": total_skipped,
+            "unmatched": total_unmatched,
         }
 
     except Exception as e:
@@ -85,7 +119,7 @@ async def sync_freenow(ctx, log_id: int, start_date: str, end_date: str):
                 session.commit()
         except Exception:
             logger.exception("Failed to update SyncLog after error")
-        raise  # Re-raise to let Arq handle retry if configured
+        raise
     finally:
         session.close()
 

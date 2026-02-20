@@ -20,11 +20,14 @@ class FreeNowScraper(BaseScraper):
 
     PORTAL_URL = "https://portal.free-now.com"
 
-    def __init__(self, start_date: date | None = None, end_date: date | None = None):
+    def __init__(self, start_date: date | None = None, end_date: date | None = None,
+                 email: str | None = None, password: str | None = None,
+                 account_label: str = ""):
         super().__init__()
         settings = get_settings()
-        self.email = settings.FREENOW_EMAIL
-        self.password = settings.FREENOW_PASSWORD
+        self.email = email or settings.FREENOW_EMAIL
+        self.password = password or settings.FREENOW_PASSWORD
+        self.account_label = account_label
         self.start_date = start_date or self.yesterday
         self.end_date = end_date or self.yesterday
 
@@ -37,7 +40,8 @@ class FreeNowScraper(BaseScraper):
         tag = (f"{self.start_date.isoformat()}_to_{self.end_date.isoformat()}"
                if self.start_date != self.end_date
                else self.start_date.isoformat())
-        output_path = os.path.join(self.imports_dir, f"freenow_{tag}.csv")
+        label_suffix = f"_{self.account_label}" if self.account_label else ""
+        output_path = os.path.join(self.imports_dir, f"freenow{label_suffix}_{tag}.csv")
 
         if os.path.exists(output_path):
             print(f"Already downloaded: {output_path}")
@@ -152,6 +156,9 @@ def main():
     parser = argparse.ArgumentParser(description="Download FreeNow booking CSV")
     parser.add_argument("--start", help="Start date YYYY-MM-DD (default: yesterday)")
     parser.add_argument("--end", help="End date YYYY-MM-DD (default: same as start)")
+    parser.add_argument("--email", help="FreeNow email (overrides .env)")
+    parser.add_argument("--password", help="FreeNow password (overrides .env)")
+    parser.add_argument("--label", default="", help="Account label for output filename")
     args = parser.parse_args()
 
     start = date.fromisoformat(args.start) if args.start else None
@@ -159,7 +166,9 @@ def main():
     if start and not end:
         end = start
 
-    scraper = FreeNowScraper(start_date=start, end_date=end)
+    scraper = FreeNowScraper(start_date=start, end_date=end,
+                             email=args.email, password=args.password,
+                             account_label=args.label)
     result = scraper.run()
     if result:
         print(f"\nDone! CSV at: {result}")

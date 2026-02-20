@@ -30,8 +30,27 @@ class Settings(BaseSettings):
     UBER_PASSWORD: str = ""
     FREENOW_EMAIL: str = ""
     FREENOW_PASSWORD: str = ""
+    FREENOW_EMAIL_2: str = ""
+    FREENOW_PASSWORD_2: str = ""
     PRIMA_EMAIL: str = ""
     PRIMA_PASSWORD: str = ""
+
+    def get_freenow_accounts(self) -> list[dict]:
+        """Return list of configured FreeNow accounts with label/email/password."""
+        accounts = []
+        if self.FREENOW_EMAIL and self.FREENOW_PASSWORD:
+            accounts.append({
+                "label": "account1",
+                "email": self.FREENOW_EMAIL,
+                "password": self.FREENOW_PASSWORD,
+            })
+        if self.FREENOW_EMAIL_2 and self.FREENOW_PASSWORD_2:
+            accounts.append({
+                "label": "account2",
+                "email": self.FREENOW_EMAIL_2,
+                "password": self.FREENOW_PASSWORD_2,
+            })
+        return accounts
 
     model_config = {"env_file": ".env", "extra": "ignore"}
 

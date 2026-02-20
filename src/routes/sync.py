@@ -15,6 +15,7 @@ from scripts.parsers.prima_parser import parse_prima_csv
 from src.routes.upload import _build_lookups, _resolve_driver_vehicle, TRIP_FIELDS
 from src.template_config import templates, root_path
 from src.services.job_service import enqueue_sync
+from src.config import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -103,6 +104,7 @@ async def sync_page(request: Request, user: dict = Depends(require_admin), sessi
 
     yesterday = (date.today() - timedelta(days=1)).isoformat()
     week_ago = (date.today() - timedelta(days=7)).isoformat()
+    freenow_accounts = len(get_settings().get_freenow_accounts())
     return templates.TemplateResponse(request, "sync.html", {
         "user": user,
         "platform_status": platform_status,
@@ -111,6 +113,7 @@ async def sync_page(request: Request, user: dict = Depends(require_admin), sessi
         "has_running_sync": has_running_sync,
         "default_start": week_ago,
         "default_end": yesterday,
+        "freenow_accounts": freenow_accounts,
     })
 
 
