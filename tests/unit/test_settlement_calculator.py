@@ -278,7 +278,7 @@ def test_calculate_daily_settlement_returns_all_keys():
         "prima_amount", "freenow_fixed_bruto", "freenow_fixed", "uber_t3_fixed",
         "recaudacion_total", "incidents_amount", "recaudacion_neta",
         "iva", "base_imponible", "driver_pct", "parte_proporcional",
-        "tpv_visa_total", "freenow_app", "uber_total_payment",
+        "tpv_visa_total", "freenow_app", "uber_total_payment", "cash",
         "fuel_total", "other_expenses_total", "anticipado", "liquidacion",
     }
     assert set(result.keys()) == expected_keys

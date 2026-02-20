@@ -158,7 +158,10 @@ def calculate_daily_settlement(
         - other_expenses_total - fuel_deduction
     )
 
-    # 9. Liquidacion = parte_proporcional - anticipado
+    # 9. Cash = recaudacion_neta - tpv_visa - freenow_app - uber_total_payment
+    cash = recaudacion_neta - tpv_visa_total - freenow_app - uber_total_payment
+
+    # 10. Liquidacion = parte_proporcional - anticipado
     liquidacion = parte_proporcional - anticipado
 
     return {
@@ -178,6 +181,7 @@ def calculate_daily_settlement(
         "uber_total_payment": uber_total_payment,
         "fuel_total": fuel_total,
         "other_expenses_total": other_expenses_total,
+        "cash": cash,
         "anticipado": anticipado,
         "liquidacion": liquidacion,
     }

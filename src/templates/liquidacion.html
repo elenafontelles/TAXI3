@@ -117,13 +117,13 @@
                         <th>FreenowT3</th>
                         <th>Uber T3</th>
                         <th>Rec.Neta</th>
-                        <th>IVA</th>
-                        <th>Base Imp.</th>
                         <th>%</th>
-                        <th>Parte Prop.</th>
-                        <th>TPV/VISA</th>
+                        <th>TPV</th>
                         <th>App FN</th>
                         <th>App Uber</th>
+                        <th>Cash</th>
+                        <th>IVA</th>
+                        <th>Parte Prop.</th>
                         <th>Gasolina</th>
                         <th>Otros</th>
                         <th>Anticipado</th>
@@ -139,13 +139,13 @@
                         <td>{{ "%.2f"|format(r.freenow_fixed) }}</td>
                         <td>{{ "%.2f"|format(r.uber_t3_fixed) }}</td>
                         <td>{{ "%.2f"|format(r.recaudacion_neta) }}</td>
-                        <td>{{ "%.2f"|format(r.iva) }}</td>
-                        <td>{{ "%.2f"|format(r.base_imponible) }}</td>
                         <td>{{ "%.0f"|format(r.driver_pct) }}%</td>
-                        <td>{{ "%.2f"|format(r.parte_proporcional) }}</td>
                         <td>{{ "%.2f"|format(r.tpv_visa_total) }}</td>
                         <td>{{ "%.2f"|format(r.freenow_app) }}</td>
                         <td>{{ "%.2f"|format(r.uber_total_payment) }}</td>
+                        <td>{{ "%.2f"|format(r.cash) }}</td>
+                        <td>{{ "%.2f"|format(r.iva) }}</td>
+                        <td>{{ "%.2f"|format(r.parte_proporcional) }}</td>
                         <td>{{ "%.2f"|format(r.fuel_total) }}</td>
                         <td>{{ "%.2f"|format(r.other_expenses_total) }}</td>
                         <td>{{ "%.2f"|format(r.anticipado) }}</td>
@@ -163,13 +163,13 @@
                         <td>{{ "%.2f"|format(totals.freenow_fixed) }}</td>
                         <td>{{ "%.2f"|format(totals.uber_t3_fixed) }}</td>
                         <td>{{ "%.2f"|format(totals.recaudacion_neta) }}</td>
-                        <td>{{ "%.2f"|format(totals.iva) }}</td>
-                        <td>{{ "%.2f"|format(totals.base_imponible) }}</td>
                         <td>-</td>
-                        <td>{{ "%.2f"|format(totals.parte_proporcional) }}</td>
                         <td>{{ "%.2f"|format(totals.tpv_visa_total) }}</td>
                         <td>{{ "%.2f"|format(totals.freenow_app) }}</td>
                         <td>{{ "%.2f"|format(totals.uber_total_payment) }}</td>
+                        <td>{{ "%.2f"|format(totals.cash) }}</td>
+                        <td>{{ "%.2f"|format(totals.iva) }}</td>
+                        <td>{{ "%.2f"|format(totals.parte_proporcional) }}</td>
                         <td>{{ "%.2f"|format(totals.fuel_total) }}</td>
                         <td>{{ "%.2f"|format(totals.other_expenses_total) }}</td>
                         <td>{{ "%.2f"|format(totals.anticipado) }}</td>

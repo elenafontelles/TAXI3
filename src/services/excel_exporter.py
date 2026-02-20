@@ -29,8 +29,8 @@ def export_settlement_to_excel(
     # Column headers (synced with liquidacion.html)
     headers = [
         "Fecha", "Prima", "Inc", "FreenowT3", "Uber T3",
-        "Rec. Neta", "IVA", "Base Imp.", "%",
-        "Parte Prop.", "TPV/VISA", "App FN", "App Uber",
+        "Rec. Neta", "%", "TPV", "App FN", "App Uber",
+        "Cash", "IVA", "Parte Prop.",
         "Gasolina", "Otros", "Anticipado", "Liquidacion",
     ]
 
@@ -52,13 +52,13 @@ def export_settlement_to_excel(
         ws.cell(row=row, column=4, value=float(r.get("freenow_fixed", 0)))
         ws.cell(row=row, column=5, value=float(r.get("uber_t3_fixed", 0)))
         ws.cell(row=row, column=6, value=float(r.get("recaudacion_neta", 0)))
-        ws.cell(row=row, column=7, value=float(r.get("iva", 0)))
-        ws.cell(row=row, column=8, value=float(r.get("base_imponible", 0)))
-        ws.cell(row=row, column=9, value=float(r.get("driver_pct", 0)))
-        ws.cell(row=row, column=10, value=float(r.get("parte_proporcional", 0)))
-        ws.cell(row=row, column=11, value=float(r.get("tpv_visa_total", 0)))
-        ws.cell(row=row, column=12, value=float(r.get("freenow_app", 0)))
-        ws.cell(row=row, column=13, value=float(r.get("uber_total_payment", 0)))
+        ws.cell(row=row, column=7, value=float(r.get("driver_pct", 0)))
+        ws.cell(row=row, column=8, value=float(r.get("tpv_visa_total", 0)))
+        ws.cell(row=row, column=9, value=float(r.get("freenow_app", 0)))
+        ws.cell(row=row, column=10, value=float(r.get("uber_total_payment", 0)))
+        ws.cell(row=row, column=11, value=float(r.get("cash", 0)))
+        ws.cell(row=row, column=12, value=float(r.get("iva", 0)))
+        ws.cell(row=row, column=13, value=float(r.get("parte_proporcional", 0)))
         ws.cell(row=row, column=14, value=float(r.get("fuel_total", 0)))
         ws.cell(row=row, column=15, value=float(r.get("other_expenses_total", 0)))
         ws.cell(row=row, column=16, value=float(r.get("anticipado", 0)))
@@ -77,8 +77,8 @@ def export_settlement_to_excel(
     total_cols = {
         2: "prima_amount", 3: "incidents_amount", 4: "freenow_fixed",
         5: "uber_t3_fixed", 6: "recaudacion_neta",
-        7: "iva", 8: "base_imponible", 10: "parte_proporcional",
-        11: "tpv_visa_total", 12: "freenow_app", 13: "uber_total_payment",
+        8: "tpv_visa_total", 9: "freenow_app", 10: "uber_total_payment",
+        11: "cash", 12: "iva", 13: "parte_proporcional",
         14: "fuel_total", 15: "other_expenses_total",
         16: "anticipado", 17: "liquidacion",
     }
