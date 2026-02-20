@@ -45,7 +45,7 @@
                     <td>
                         {% if pv.trip_id and incident_trips.get(pv.id) %}
                         <a href="{{ root_path }}/trips?search={{ incident_trips[pv.id].id }}">
-                            {{ incident_trips[pv.id].source }} - {{ incident_trips[pv.id].total_amount|round(2) }} EUR
+                            {{ incident_trips[pv.id].source }} - {{ "%.2f"|format(incident_trips[pv.id].gross_amount or 0) }} EUR
                         </a>
                         {% else %}
                         —
