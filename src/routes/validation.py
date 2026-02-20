@@ -6,6 +6,7 @@ from src.routes.auth import require_admin
 from src.database import get_session
 from src.models.pending_validation import PendingValidation
 from src.models.trip import Trip
+from src.models.vehicle import Vehicle
 from src.template_config import templates, root_path
 
 router = APIRouter()
@@ -14,35 +15,33 @@ router = APIRouter()
 @router.get("/validacion", response_class=HTMLResponse)
 async def validation_page(
     request: Request,
-    tab: str = "incidents",
     user: dict = Depends(require_admin),
     session: Session = Depends(get_session),
 ):
     incidents = session.query(PendingValidation).filter_by(
         validation_type="incident", status="pending"
     ).all()
-    visa_pending = session.query(PendingValidation).filter_by(
-        validation_type="visa_no_match", status="pending"
-    ).all()
-    fuel_pending = session.query(PendingValidation).filter_by(
-        validation_type="fuel_no_match", status="pending"
-    ).all()
 
     incident_trips = {}
+    incident_vehicles = {}
+    filtered_incidents = []
     for pv in incidents:
         if pv.trip_id:
             trip = session.get(Trip, pv.trip_id)
-            if trip:
+            if trip and float(trip.gross_amount or 0) != 0:
                 incident_trips[pv.id] = trip
+                if trip.vehicle_id:
+                    vehicle = session.get(Vehicle, trip.vehicle_id)
+                    if vehicle:
+                        incident_vehicles[pv.id] = vehicle.plate
+                filtered_incidents.append(pv)
 
     return templates.TemplateResponse(request, "validation.html", {
         "user": user,
-        "tab": tab,
-        "incidents": incidents,
+        "incidents": filtered_incidents,
         "incident_trips": incident_trips,
-        "visa_pending": visa_pending,
-        "fuel_pending": fuel_pending,
-        "total_pending": len(incidents) + len(visa_pending) + len(fuel_pending),
+        "incident_vehicles": incident_vehicles,
+        "total_pending": len(filtered_incidents),
     })
 
 

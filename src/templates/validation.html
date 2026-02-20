@@ -2,27 +2,8 @@
 {% block title %}Validacion - TAXI API{% endblock %}
 {% block content %}
 <h4>Cola de Validacion</h4>
-<p class="text-muted">{{ total_pending }} elemento(s) pendiente(s)</p>
+<p class="text-muted">{{ total_pending }} incidencia(s) pendiente(s)</p>
 
-<ul class="nav nav-tabs mb-4">
-    <li class="nav-item">
-        <a class="nav-link {% if tab == 'incidents' %}active{% endif %}" href="{{ root_path }}/validacion?tab=incidents">
-            Incidencias <span class="badge bg-secondary">{{ incidents|length }}</span>
-        </a>
-    </li>
-    <li class="nav-item">
-        <a class="nav-link {% if tab == 'visa' %}active{% endif %}" href="{{ root_path }}/validacion?tab=visa">
-            VISA sin Match <span class="badge bg-secondary">{{ visa_pending|length }}</span>
-        </a>
-    </li>
-    <li class="nav-item">
-        <a class="nav-link {% if tab == 'fuel' %}active{% endif %}" href="{{ root_path }}/validacion?tab=fuel">
-            Combustible sin Match <span class="badge bg-secondary">{{ fuel_pending|length }}</span>
-        </a>
-    </li>
-</ul>
-
-{% if tab == 'incidents' %}
 <div class="card">
     <div class="card-header">Incidencias Pendientes</div>
     <div class="card-body">
@@ -30,9 +11,9 @@
         <table class="table table-striped">
             <thead>
                 <tr>
-                    <th>Fecha</th>
-                    <th>Tipo</th>
-                    <th>Viaje</th>
+                    <th>Fecha viaje</th>
+                    <th>Matricula</th>
+                    <th>Importe</th>
                     <th>Detalles</th>
                     <th>Acciones</th>
                 </tr>
@@ -40,13 +21,17 @@
             <tbody>
                 {% for pv in incidents %}
                 <tr>
-                    <td>{{ pv.created_at.strftime('%d/%m/%Y %H:%M') if pv.created_at else '—' }}</td>
-                    <td><span class="badge bg-warning text-dark">{{ pv.validation_type }}</span></td>
                     <td>
-                        {% if pv.trip_id and incident_trips.get(pv.id) %}
-                        <a href="{{ root_path }}/trips?search={{ incident_trips[pv.id].id }}">
-                            {{ incident_trips[pv.id].source }} - {{ "%.2f"|format(incident_trips[pv.id].gross_amount or 0) }} EUR
-                        </a>
+                        {% if incident_trips.get(pv.id) %}
+                        {{ incident_trips[pv.id].started_at.strftime('%d/%m/%Y %H:%M') }}
+                        {% else %}
+                        —
+                        {% endif %}
+                    </td>
+                    <td>{{ incident_vehicles.get(pv.id, '—') }}</td>
+                    <td>
+                        {% if incident_trips.get(pv.id) %}
+                        {{ "%.2f"|format(incident_trips[pv.id].gross_amount or 0) }} EUR
                         {% else %}
                         —
                         {% endif %}
@@ -73,96 +58,4 @@
         {% endif %}
     </div>
 </div>
-{% endif %}
-
-{% if tab == 'visa' %}
-<div class="card">
-    <div class="card-header">Pagos VISA sin Match</div>
-    <div class="card-body">
-        {% if visa_pending %}
-        <table class="table table-striped">
-            <thead>
-                <tr>
-                    <th>Fecha</th>
-                    <th>Detalles</th>
-                    <th>Acciones</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for pv in visa_pending %}
-                <tr>
-                    <td>{{ pv.created_at.strftime('%d/%m/%Y %H:%M') if pv.created_at else '—' }}</td>
-                    <td>
-                        {% if pv.details %}
-                        <small>
-                            {% if pv.details.amount %}Importe: {{ pv.details.amount }} EUR<br>{% endif %}
-                            {% if pv.details.date %}Fecha: {{ pv.details.date }}<br>{% endif %}
-                            {% if pv.details.description %}{{ pv.details.description }}{% endif %}
-                        </small>
-                        {% else %}
-                        —
-                        {% endif %}
-                    </td>
-                    <td>
-                        <form action="{{ root_path }}/validacion/{{ pv.id }}/resolve" method="post" class="d-inline">
-                            <button type="submit" name="action" value="valid" class="btn btn-sm btn-success">Valido</button>
-                            <button type="submit" name="action" value="invalid" class="btn btn-sm btn-danger">Invalido</button>
-                        </form>
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-        {% else %}
-        <p class="text-muted mb-0">No hay pagos VISA pendientes de validacion.</p>
-        {% endif %}
-    </div>
-</div>
-{% endif %}
-
-{% if tab == 'fuel' %}
-<div class="card">
-    <div class="card-header">Combustible sin Match</div>
-    <div class="card-body">
-        {% if fuel_pending %}
-        <table class="table table-striped">
-            <thead>
-                <tr>
-                    <th>Fecha</th>
-                    <th>Detalles</th>
-                    <th>Acciones</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for pv in fuel_pending %}
-                <tr>
-                    <td>{{ pv.created_at.strftime('%d/%m/%Y %H:%M') if pv.created_at else '—' }}</td>
-                    <td>
-                        {% if pv.details %}
-                        <small>
-                            {% if pv.details.amount %}Importe: {{ pv.details.amount }} EUR<br>{% endif %}
-                            {% if pv.details.liters %}Litros: {{ pv.details.liters }}<br>{% endif %}
-                            {% if pv.details.station %}Estacion: {{ pv.details.station }}<br>{% endif %}
-                            {% if pv.details.date %}Fecha: {{ pv.details.date }}{% endif %}
-                        </small>
-                        {% else %}
-                        —
-                        {% endif %}
-                    </td>
-                    <td>
-                        <form action="{{ root_path }}/validacion/{{ pv.id }}/resolve" method="post" class="d-inline">
-                            <button type="submit" name="action" value="valid" class="btn btn-sm btn-success">Valido</button>
-                            <button type="submit" name="action" value="invalid" class="btn btn-sm btn-danger">Invalido</button>
-                        </form>
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-        {% else %}
-        <p class="text-muted mb-0">No hay registros de combustible pendientes de validacion.</p>
-        {% endif %}
-    </div>
-</div>
-{% endif %}
 {% endblock %}
