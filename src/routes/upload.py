@@ -209,6 +209,31 @@ async def process_upload(
 
         # Delete existing trips for this source in the date range
         from sqlalchemy import func
+        from src.models.pending_validation import PendingValidation
+        from src.models.visa_payment import VisaPayment
+
+        # Find trip IDs to delete
+        trip_ids_to_delete = [
+            t.id for t in session.query(Trip.id).filter(
+                Trip.source == source,
+                func.date(Trip.started_at) >= date_min,
+                func.date(Trip.started_at) <= date_max,
+            ).all()
+        ]
+
+        # Clear FK references before deleting trips
+        if trip_ids_to_delete:
+            session.query(PendingValidation).filter(
+                PendingValidation.trip_id.in_(trip_ids_to_delete)
+            ).delete(synchronize_session=False)
+            session.query(VisaPayment).filter(
+                VisaPayment.trip_id.in_(trip_ids_to_delete)
+            ).delete(synchronize_session=False)
+            # Clear self-referential linked_trip_id
+            session.query(Trip).filter(
+                Trip.linked_trip_id.in_(trip_ids_to_delete)
+            ).update({Trip.linked_trip_id: None}, synchronize_session=False)
+
         deleted = session.query(Trip).filter(
             Trip.source == source,
             func.date(Trip.started_at) >= date_min,
