@@ -20,7 +20,7 @@ from src.models.vehicle import Vehicle
 from src.services.settlement_calculator import calculate_daily_settlement
 from src.services.excel_exporter import export_settlement_to_excel
 from src.services.pdf_exporter import export_settlement_to_pdf
-from src.template_config import templates
+from src.template_config import templates, root_path
 
 router = APIRouter()
 
@@ -367,10 +367,6 @@ async def export_liquidacion(
     session: Session = Depends(get_session),
 ):
     """Export settlement to Excel."""
-    from src.config import settings
-
-    root_path = settings.root_path
-
     driver = session.get(Driver, driver_id)
     if not driver:
         return RedirectResponse(url=f"{root_path}/liquidacion", status_code=303)
@@ -419,10 +415,6 @@ async def export_liquidacion_pdf(
     session: Session = Depends(get_session),
 ):
     """Export settlement to PDF."""
-    from src.config import settings
-
-    root_path = settings.root_path
-
     driver = session.get(Driver, driver_id)
     if not driver:
         return RedirectResponse(url=f"{root_path}/liquidacion", status_code=303)
