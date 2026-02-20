@@ -1,8 +1,12 @@
 {% extends "base.html" %}
 {% block title %}Viajes - TAXI API{% endblock %}
 
+{% macro filter_params() -%}
+{{ '&source=' + selected_source if selected_source }}{{ '&driver_id=' + selected_driver_id if selected_driver_id }}{{ '&start_date=' + start_date if start_date }}{{ '&end_date=' + end_date if end_date }}
+{%- endmacro %}
+
 {% macro sort_url(column) -%}
-{{ root_path }}/trips?sort={{ column }}&order={{ 'asc' if sort == column and order == 'desc' else 'desc' }}{{ '&source=' + selected_source if selected_source }}&page=1
+{{ root_path }}/trips?sort={{ column }}&order={{ 'asc' if sort == column and order == 'desc' else 'desc' }}{{ filter_params() }}&page=1
 {%- endmacro %}
 
 {% macro sort_icon(column) -%}
@@ -16,83 +20,53 @@
 {% block content %}
 <h4>Viajes</h4>
 
-{% if user.role == 'admin' %}
-<!-- Manual Uber trip entry form -->
 <div class="card mb-4">
-    <div class="card-header d-flex justify-content-between align-items-center">
-        <h6 class="mb-0">Nuevo viaje Uber (manual)</h6>
-        <span class="badge bg-dark">Uber</span>
-    </div>
+    <div class="card-header">Filtros</div>
     <div class="card-body">
-        <form method="post" action="{{ root_path }}/trips/uber" class="row g-2 align-items-end">
-            <div class="col-md-2">
-                <label class="form-label small">Fecha</label>
-                <input type="date" class="form-control form-control-sm" name="trip_date" required>
-            </div>
-            <div class="col-md-1">
-                <label class="form-label small">Hora</label>
-                <input type="time" class="form-control form-control-sm" name="trip_time" value="12:00" required>
-            </div>
-            <div class="col-md-2">
-                <label class="form-label small">Conductor</label>
-                <select class="form-select form-select-sm" name="driver_id" required>
-                    <option value="">Seleccionar...</option>
-                    {% for d in drivers %}
-                    <option value="{{ d.id }}">{{ d.name }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="col-md-2">
-                <label class="form-label small">Vehiculo</label>
-                <select class="form-select form-select-sm" name="vehicle_id" required>
-                    <option value="">Seleccionar...</option>
-                    {% for v in vehicles %}
-                    <option value="{{ v.id }}">{{ v.plate }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="col-md-1">
-                <label class="form-label small">Importe</label>
-                <input type="text" class="form-control form-control-sm" name="gross_amount" placeholder="0.00" required>
-            </div>
-            <div class="col-md-1">
-                <label class="form-label small">Propina</label>
-                <input type="text" class="form-control form-control-sm" name="tips" placeholder="0.00" value="0">
-            </div>
-            <div class="col-md-1">
-                <label class="form-label small">Pago</label>
-                <select class="form-select form-select-sm" name="payment_method">
-                    <option value="">-</option>
-                    <option value="card">Tarjeta</option>
-                    <option value="cash">Efectivo</option>
-                    <option value="apple_pay">Apple Pay</option>
-                </select>
-            </div>
-            <div class="col-md-2">
-                <button type="submit" class="btn btn-dark btn-sm w-100">Guardar viaje</button>
+        <form method="get" action="{{ root_path }}/trips">
+            <input type="hidden" name="sort" value="{{ sort }}">
+            <input type="hidden" name="order" value="{{ order }}">
+            <div class="row mb-3">
+                <div class="col-md-2">
+                    <label for="start_date" class="form-label">Fecha inicio</label>
+                    <input type="date" class="form-control" id="start_date" name="start_date"
+                           value="{{ start_date }}">
+                </div>
+                <div class="col-md-2">
+                    <label for="end_date" class="form-label">Fecha fin</label>
+                    <input type="date" class="form-control" id="end_date" name="end_date"
+                           value="{{ end_date }}">
+                </div>
+                <div class="col-md-2">
+                    <label for="source" class="form-label">Plataforma</label>
+                    <select class="form-select" id="source" name="source">
+                        <option value="">Todas</option>
+                        <option value="prima" {{ 'selected' if selected_source == 'prima' }}>Prima</option>
+                        <option value="freenow" {{ 'selected' if selected_source == 'freenow' }}>FreeNow</option>
+                        <option value="uber" {{ 'selected' if selected_source == 'uber' }}>Uber</option>
+                    </select>
+                </div>
+                {% if user.role in ['admin', 'owner'] %}
+                <div class="col-md-3">
+                    <label for="driver_id" class="form-label">Conductor</label>
+                    <select class="form-select" id="driver_id" name="driver_id">
+                        <option value="">Todos</option>
+                        {% for d in drivers %}
+                        <option value="{{ d.id }}" {{ 'selected' if selected_driver_id == d.id }}>{{ d.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                {% endif %}
+                <div class="col-md-1 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary w-100">Filtrar</button>
+                </div>
             </div>
         </form>
     </div>
 </div>
-{% endif %}
 
 <div class="card">
     <div class="card-body">
-        <form method="get" action="{{ root_path }}/trips" class="row mb-3">
-            <input type="hidden" name="sort" value="{{ sort }}">
-            <input type="hidden" name="order" value="{{ order }}">
-            <div class="col-md-3">
-                <select class="form-select" name="source">
-                    <option value="">Todas las plataformas</option>
-                    <option value="uber" {{ 'selected' if selected_source == 'uber' }}>Uber</option>
-                    <option value="freenow" {{ 'selected' if selected_source == 'freenow' }}>FreeNow</option>
-                    <option value="prima" {{ 'selected' if selected_source == 'prima' }}>Prima</option>
-                </select>
-            </div>
-            <div class="col-md-3">
-                <button type="submit" class="btn btn-primary">Filtrar</button>
-            </div>
-        </form>
         <table class="table table-striped">
             <thead>
                 <tr>
@@ -124,15 +98,15 @@
             <nav>
                 <ul class="pagination pagination-sm mb-0">
                     <li class="page-item {{ 'disabled' if page <= 1 }}">
-                        <a class="page-link" href="{{ root_path }}/trips?page={{ page - 1 }}&sort={{ sort }}&order={{ order }}{{ '&source=' + selected_source if selected_source }}">Anterior</a>
+                        <a class="page-link" href="{{ root_path }}/trips?page={{ page - 1 }}&sort={{ sort }}&order={{ order }}{{ filter_params() }}">Anterior</a>
                     </li>
                     {% for p in range(1, total_pages + 1) %}
                     <li class="page-item {{ 'active' if p == page }}">
-                        <a class="page-link" href="{{ root_path }}/trips?page={{ p }}&sort={{ sort }}&order={{ order }}{{ '&source=' + selected_source if selected_source }}">{{ p }}</a>
+                        <a class="page-link" href="{{ root_path }}/trips?page={{ p }}&sort={{ sort }}&order={{ order }}{{ filter_params() }}">{{ p }}</a>
                     </li>
                     {% endfor %}
                     <li class="page-item {{ 'disabled' if page >= total_pages }}">
-                        <a class="page-link" href="{{ root_path }}/trips?page={{ page + 1 }}&sort={{ sort }}&order={{ order }}{{ '&source=' + selected_source if selected_source }}">Siguiente</a>
+                        <a class="page-link" href="{{ root_path }}/trips?page={{ page + 1 }}&sort={{ sort }}&order={{ order }}{{ filter_params() }}">Siguiente</a>
                     </li>
                 </ul>
             </nav>

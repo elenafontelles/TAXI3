@@ -169,6 +169,8 @@ def get_trips_list(
     session: Session,
     driver_id: str | None = None,
     source: str | None = None,
+    start_date: date | None = None,
+    end_date: date | None = None,
     page: int = 1,
     per_page: int = 50,
     sort: str = "started_at",
@@ -183,6 +185,10 @@ def get_trips_list(
         q = q.filter(Trip.driver_id == driver_id)
     if source:
         q = q.filter(Trip.source == source)
+    if start_date:
+        q = q.filter(func.date(Trip.started_at) >= start_date)
+    if end_date:
+        q = q.filter(func.date(Trip.started_at) <= end_date)
 
     col = SORTABLE_COLUMNS.get(sort, Trip.started_at)
     q = q.order_by(col.asc() if order == "asc" else col.desc())
