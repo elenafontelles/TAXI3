@@ -55,8 +55,10 @@ def _get_driver_kpis(session: Session, driver: Driver, sd: date, ed: date) -> di
         func.date(Shift.started_at) <= ed,
     ).all()
     km_free = sum((Decimal(str(s.km_free or 0)) for s in shifts), Decimal("0"))
-    km_occupied = sum((Decimal(str(s.km_occupied or 0)) for s in shifts), Decimal("0"))
 
+    # km occupied = distance_km from prima trips (columna "km" del archivo Prima)
+    # km free = km_free from shifts (columna "km_free" del archivo Prima)
+    # total km = km occupied + km free
     total_km = prima_km + km_free
 
     # --- FreeNow trips (FIXED only) ---
@@ -121,9 +123,8 @@ def _get_driver_kpis(session: Session, driver: Driver, sd: date, ed: date) -> di
     # Promedio diario
     promedio_diario = (total_rec_neta / dias) if dias > 0 else Decimal("0.00")
 
-    # Tasa de ocupacion: km_occupied / (km_occupied + km_free)
-    total_shift_km = km_occupied + km_free
-    tasa_ocupacion = (km_occupied / total_shift_km * 100) if total_shift_km > 0 else Decimal("0.00")
+    # Tasa de ocupacion: km_occupied (prima_km) / total_km
+    tasa_ocupacion = (prima_km / total_km * 100) if total_km > 0 else Decimal("0.00")
 
     # % por plataforma
     pct_prima = (prima_amount / total_rec_neta * 100) if total_rec_neta > 0 else Decimal("0.00")
@@ -164,6 +165,8 @@ def _get_driver_kpis(session: Session, driver: Driver, sd: date, ed: date) -> di
         "uber_t3": float(uber_t3.quantize(Decimal("0.01"))),
         "total_rec": float(total_rec_bruto.quantize(Decimal("0.01"))),
         "total_rec_neta": float(total_rec_neta.quantize(Decimal("0.01"))),
+        "km_occupied": float(prima_km.quantize(Decimal("0.01"))),
+        "km_free": float(km_free.quantize(Decimal("0.01"))),
         "km": float(total_km.quantize(Decimal("0.01"))),
         "eur_per_km": float(eur_per_km.quantize(Decimal("0.01"))),
         "eur_per_viaje": float(eur_per_viaje.quantize(Decimal("0.01"))),
