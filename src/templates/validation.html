@@ -38,7 +38,10 @@
                     </td>
                     <td>
                         {% if pv.details %}
-                        <small>{{ pv.details }}</small>
+                        <small>
+                            dist: {{ pv.details.get('distance_km', '—') }} km,
+                            dur: {{ pv.details.get('duration_minutes', '—') }} min
+                        </small>
                         {% else %}
                         —
                         {% endif %}
