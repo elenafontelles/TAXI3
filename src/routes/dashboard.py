@@ -55,6 +55,7 @@ def _get_driver_kpis(session: Session, driver: Driver, sd: date, ed: date) -> di
         func.date(Shift.started_at) <= ed,
     ).all()
     km_free = sum(Decimal(str(s.km_free or 0)) for s in shifts)
+    km_occupied = sum(Decimal(str(s.km_occupied or 0)) for s in shifts)
 
     total_km = prima_km + km_free
 
@@ -114,8 +115,20 @@ def _get_driver_kpis(session: Session, driver: Driver, sd: date, ed: date) -> di
     # EUR/km
     eur_per_km = (total_rec_neta / total_km) if total_km > 0 else Decimal("0.00")
 
+    # EUR/viaje
+    eur_per_viaje = (total_rec_neta / viajes) if viajes > 0 else Decimal("0.00")
+
     # Promedio diario
     promedio_diario = (total_rec_neta / dias) if dias > 0 else Decimal("0.00")
+
+    # Tasa de ocupacion: km_occupied / (km_occupied + km_free)
+    total_shift_km = km_occupied + km_free
+    tasa_ocupacion = (km_occupied / total_shift_km * 100) if total_shift_km > 0 else Decimal("0.00")
+
+    # % por plataforma
+    pct_prima = (prima_amount / total_rec_neta * 100) if total_rec_neta > 0 else Decimal("0.00")
+    pct_freenow = (freenow_t3_net / total_rec_neta * 100) if total_rec_neta > 0 else Decimal("0.00")
+    pct_uber = (uber_t3 / total_rec_neta * 100) if total_rec_neta > 0 else Decimal("0.00")
 
     # --- Fuel ---
     fuel_rows = session.query(FuelExpense).filter(
@@ -140,6 +153,7 @@ def _get_driver_kpis(session: Session, driver: Driver, sd: date, ed: date) -> di
     fuel_liters = sum(Decimal(str(f.liters or 0)) for f in fuel_rows)
     fuel_price_per_liter = (fuel_cost / fuel_liters) if fuel_liters > 0 else Decimal("0.00")
     fuel_pct = (fuel_cost / total_rec_neta * 100) if total_rec_neta > 0 else Decimal("0.00")
+    fuel_cost_per_km = (fuel_cost / total_km) if total_km > 0 else Decimal("0.00")
 
     return {
         "driver_name": driver.name,
@@ -152,12 +166,19 @@ def _get_driver_kpis(session: Session, driver: Driver, sd: date, ed: date) -> di
         "total_rec_neta": float(total_rec_neta.quantize(Decimal("0.01"))),
         "km": float(total_km.quantize(Decimal("0.01"))),
         "eur_per_km": float(eur_per_km.quantize(Decimal("0.01"))),
+        "eur_per_viaje": float(eur_per_viaje.quantize(Decimal("0.01"))),
         "promedio_diario": float(promedio_diario.quantize(Decimal("0.01"))),
+        "tasa_ocupacion": float(tasa_ocupacion.quantize(Decimal("0.1"))),
+        # Platform mix
+        "pct_prima": float(pct_prima.quantize(Decimal("0.1"))),
+        "pct_freenow": float(pct_freenow.quantize(Decimal("0.1"))),
+        "pct_uber": float(pct_uber.quantize(Decimal("0.1"))),
         # Fuel
         "fuel_cost": float(fuel_cost.quantize(Decimal("0.01"))),
         "fuel_liters": float(fuel_liters.quantize(Decimal("0.01"))),
         "fuel_price_per_liter": float(fuel_price_per_liter.quantize(Decimal("0.01"))),
         "fuel_pct": float(fuel_pct.quantize(Decimal("0.01"))),
+        "fuel_cost_per_km": float(fuel_cost_per_km.quantize(Decimal("0.01"))),
     }
 
 

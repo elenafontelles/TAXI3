@@ -45,7 +45,9 @@
                         <th>Tot.Rec.Neta</th>
                         <th>Km</th>
                         <th>EUR/km</th>
+                        <th>EUR/viaje</th>
                         <th>Prom.Diario</th>
+                        <th>Ocup.%</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -61,7 +63,9 @@
                         <td class="fw-bold">{{ "%.2f"|format(d.total_rec_neta) }}</td>
                         <td>{{ "%.1f"|format(d.km) }}</td>
                         <td>{{ "%.2f"|format(d.eur_per_km) }}</td>
+                        <td>{{ "%.2f"|format(d.eur_per_viaje) }}</td>
                         <td class="fw-bold">{{ "%.2f"|format(d.promedio_diario) }}</td>
+                        <td>{{ "%.1f"|format(d.tasa_ocupacion) }}%</td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -91,6 +95,7 @@
                             <th>Coste</th>
                             <th>Litros</th>
                             <th>EUR/L</th>
+                            <th>EUR/km</th>
                             <th>% s/Rec</th>
                         </tr>
                     </thead>
@@ -101,6 +106,7 @@
                             <td>{{ "%.2f"|format(d.fuel_cost) }}</td>
                             <td>{{ "%.1f"|format(d.fuel_liters) }}</td>
                             <td>{{ "%.3f"|format(d.fuel_price_per_liter) }}</td>
+                            <td>{{ "%.3f"|format(d.fuel_cost_per_km) }}</td>
                             <td>{{ "%.1f"|format(d.fuel_pct) }}%</td>
                         </tr>
                         {% endfor %}
@@ -118,6 +124,14 @@
                 <canvas id="fuelChart"></canvas>
             </div>
         </div>
+    </div>
+</div>
+
+<!-- Platform Mix Chart -->
+<div class="card mb-4">
+    <div class="card-header">Mix Plataformas (%)</div>
+    <div class="card-body">
+        <canvas id="platformChart" height="60"></canvas>
     </div>
 </div>
 
@@ -170,6 +184,49 @@ new Chart(document.getElementById('revenueChart'), {
         scales: {
             x: { stacked: true },
             y: { stacked: true, beginAtZero: true, title: { display: true, text: 'EUR' } }
+        }
+    }
+});
+
+// Platform mix stacked 100% bar chart
+new Chart(document.getElementById('platformChart'), {
+    type: 'bar',
+    data: {
+        labels: names,
+        datasets: [
+            {
+                label: 'Prima %',
+                data: kpis.map(d => d.pct_prima),
+                backgroundColor: 'rgba(255,193,7,0.7)',
+                borderColor: 'rgba(255,193,7,1)',
+                borderWidth: 1,
+            },
+            {
+                label: 'FreeNow %',
+                data: kpis.map(d => d.pct_freenow),
+                backgroundColor: 'rgba(40,167,69,0.7)',
+                borderColor: 'rgba(40,167,69,1)',
+                borderWidth: 1,
+            },
+            {
+                label: 'Uber %',
+                data: kpis.map(d => d.pct_uber),
+                backgroundColor: 'rgba(0,0,0,0.7)',
+                borderColor: 'rgba(0,0,0,1)',
+                borderWidth: 1,
+            },
+        ]
+    },
+    options: {
+        indexAxis: 'y',
+        responsive: true,
+        plugins: {
+            legend: { position: 'top' },
+            tooltip: { callbacks: { label: ctx => ctx.dataset.label + ': ' + ctx.raw.toFixed(1) + '%' } }
+        },
+        scales: {
+            x: { stacked: true, max: 100, title: { display: true, text: '%' } },
+            y: { stacked: true }
         }
     }
 });
