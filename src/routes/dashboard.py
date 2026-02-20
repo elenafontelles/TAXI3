@@ -38,9 +38,9 @@ def _get_driver_kpis(session: Session, driver: Driver, sd: date, ed: date) -> di
         func.date(Trip.started_at) <= ed,
     ).all()
 
-    prima_amount = sum(Decimal(str(t.gross_amount or 0)) for t in prima_trips)
+    prima_amount = sum((Decimal(str(t.gross_amount or 0)) for t in prima_trips), Decimal("0"))
     prima_trip_count = len(prima_trips)
-    prima_km = sum(Decimal(str(t.distance_km or 0)) for t in prima_trips)
+    prima_km = sum((Decimal(str(t.distance_km or 0)) for t in prima_trips), Decimal("0"))
 
     # Days worked from prima (unique dates)
     prima_days = set()
@@ -54,8 +54,8 @@ def _get_driver_kpis(session: Session, driver: Driver, sd: date, ed: date) -> di
         func.date(Shift.started_at) >= sd,
         func.date(Shift.started_at) <= ed,
     ).all()
-    km_free = sum(Decimal(str(s.km_free or 0)) for s in shifts)
-    km_occupied = sum(Decimal(str(s.km_occupied or 0)) for s in shifts)
+    km_free = sum((Decimal(str(s.km_free or 0)) for s in shifts), Decimal("0"))
+    km_occupied = sum((Decimal(str(s.km_occupied or 0)) for s in shifts), Decimal("0"))
 
     total_km = prima_km + km_free
 
@@ -68,8 +68,8 @@ def _get_driver_kpis(session: Session, driver: Driver, sd: date, ed: date) -> di
         Trip.fare_type != "METERED",
     ).all()
 
-    freenow_bruto = sum(Decimal(str(t.gross_amount or 0)) for t in freenow_trips)
-    freenow_tips = sum(abs(Decimal(str(t.tips or 0))) for t in freenow_trips)
+    freenow_bruto = sum((Decimal(str(t.gross_amount or 0)) for t in freenow_trips), Decimal("0"))
+    freenow_tips = sum((abs(Decimal(str(t.tips or 0))) for t in freenow_trips), Decimal("0"))
     freenow_trip_count = len(freenow_trips)
 
     # FreeNow T3: net or bruto depending on driver config
@@ -94,7 +94,7 @@ def _get_driver_kpis(session: Session, driver: Driver, sd: date, ed: date) -> di
             UberDailySummary.date >= sd,
             UberDailySummary.date <= ed,
         ).all()
-        uber_t3 = sum(Decimal(str(u.t3_fixed or 0)) for u in uber_rows)
+        uber_t3 = sum((Decimal(str(u.t3_fixed or 0)) for u in uber_rows), Decimal("0"))
         uber_days = {u.date for u in uber_rows}
 
     # --- Totals ---
@@ -149,8 +149,8 @@ def _get_driver_kpis(session: Session, driver: Driver, sd: date, ed: date) -> di
                 FuelExpense.date <= ed,
             ).all()
 
-    fuel_cost = sum(Decimal(str(f.amount or 0)) for f in fuel_rows)
-    fuel_liters = sum(Decimal(str(f.liters or 0)) for f in fuel_rows)
+    fuel_cost = sum((Decimal(str(f.amount or 0)) for f in fuel_rows), Decimal("0"))
+    fuel_liters = sum((Decimal(str(f.liters or 0)) for f in fuel_rows), Decimal("0"))
     fuel_price_per_liter = (fuel_cost / fuel_liters) if fuel_liters > 0 else Decimal("0.00")
     fuel_pct = (fuel_cost / total_rec_neta * 100) if total_rec_neta > 0 else Decimal("0.00")
     fuel_cost_per_km = (fuel_cost / total_km) if total_km > 0 else Decimal("0.00")
