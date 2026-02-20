@@ -222,20 +222,28 @@ async def sync_prima(
     return RedirectResponse(url=f"{root_path}/sync", status_code=303)
 
 
-@router.post("/sync/cross-match", response_class=HTMLResponse)
-async def cross_match(
+@router.post("/sync/clear-history", response_class=HTMLResponse)
+async def clear_sync_history(
     request: Request,
     user: dict = Depends(require_admin),
     session: Session = Depends(get_session),
 ):
-    """Manually run cross-matching of Prima trips with FreeNow/Uber."""
-    from src.services.trip_matcher import cross_match_trips
-    stats = cross_match_trips(session)
+    """Delete all sync logs and downloaded import files."""
+    # Delete all SyncLog records
+    deleted_logs = session.query(SyncLog).delete()
+    session.commit()
 
-    # Redirect back with result in query params
-    msg = f"Enlazados: {stats['matched']}, Sin enlace: {stats['no_match']}"
+    # Delete all files in imports directory
+    deleted_files = 0
+    if os.path.isdir(IMPORTS_DIR):
+        for name in os.listdir(IMPORTS_DIR):
+            filepath = os.path.join(IMPORTS_DIR, name)
+            if os.path.isfile(filepath):
+                os.unlink(filepath)
+                deleted_files += 1
+
     return RedirectResponse(
-        url=f"{root_path}/sync?cross_match_result={msg}",
+        url=f"{root_path}/sync?clear_result=Eliminados: {deleted_logs} registros, {deleted_files} archivos",
         status_code=303,
     )
 

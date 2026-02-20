@@ -120,33 +120,14 @@
     </div>
 </div>
 
-<!-- Cross-match result alert -->
-{% set cross_match_result = request.query_params.get('cross_match_result', '') %}
-{% if cross_match_result %}
-<div class="alert alert-info alert-dismissible fade show">
-    Cruce completado: {{ cross_match_result }}
+<!-- Clear result alert -->
+{% set clear_result = request.query_params.get('clear_result', '') %}
+{% if clear_result %}
+<div class="alert alert-success alert-dismissible fade show">
+    {{ clear_result }}
     <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
 </div>
 {% endif %}
-
-<!-- Cross-match card -->
-<div class="card mb-4">
-    <div class="card-header d-flex justify-content-between align-items-center">
-        <h6 class="mb-0">Cruce de viajes</h6>
-        <span class="badge bg-info">Prima ↔ Apps</span>
-    </div>
-    <div class="card-body">
-        <p class="small text-muted mb-2">
-            Enlaza viajes Prima (importe 0€) con sus equivalentes en FreeNow/Uber.
-            El cruce se ejecuta automaticamente al sincronizar Prima, pero puedes forzarlo manualmente.
-        </p>
-        <form method="post" action="{{ root_path }}/sync/cross-match" class="d-inline">
-            <button type="submit" class="btn btn-info btn-sm">
-                Ejecutar cruce manual
-            </button>
-        </form>
-    </div>
-</div>
 
 <!-- Downloaded files -->
 <div class="card mb-4">
@@ -184,8 +165,12 @@
 
 <!-- Sync history -->
 <div class="card">
-    <div class="card-header">
+    <div class="card-header d-flex justify-content-between align-items-center">
         <h6 class="mb-0">Historial de sincronizacion</h6>
+        <form method="post" action="{{ root_path }}/sync/clear-history"
+              onsubmit="return confirm('Eliminar todo el historial y archivos descargados?')">
+            <button type="submit" class="btn btn-outline-danger btn-sm">Limpiar todo</button>
+        </form>
     </div>
     <div class="card-body">
         <table class="table table-sm table-striped">
