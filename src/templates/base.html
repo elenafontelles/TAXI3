@@ -22,7 +22,6 @@
                     <li class="nav-item"><a class="nav-link" href="{{ root_path }}/">Dashboard</a></li>
                     <li class="nav-item"><a class="nav-link" href="{{ root_path }}/trips">Viajes</a></li>
                     {% if user.role in ['admin', 'owner'] %}
-                    <li class="nav-item"><a class="nav-link" href="{{ root_path }}/summary">Resumen</a></li>
                     {% endif %}
                     {% if user.role == 'admin' %}
                     <li class="nav-item"><a class="nav-link" href="{{ root_path }}/upload">Subir CSV</a></li>

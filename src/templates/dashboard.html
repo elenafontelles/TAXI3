@@ -1,194 +1,214 @@
 {% extends "base.html" %}
 {% block title %}Dashboard - TAXI API{% endblock %}
+{% block head_extra %}
+<style>
+    .kpi-table {
+        font-size: 0.85rem;
+    }
+    .kpi-table th, .kpi-table td {
+        text-align: right;
+        padding: 0.4rem 0.5rem;
+        white-space: nowrap;
+    }
+    .kpi-table th:first-child, .kpi-table td:first-child {
+        text-align: left;
+    }
+    .kpi-table thead th {
+        font-size: 0.8rem;
+    }
+    .best-value {
+        color: #198754;
+        font-weight: bold;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
-<h4>Resumen de Ingresos</h4>
-<div class="row mb-4">
-    <div class="col-md-4">
-        <div class="card text-white bg-primary">
-            <div class="card-body">
-                <h6 class="card-title">Hoy</h6>
-                <h3>{{ "%.2f"|format(summary.today) }} EUR</h3>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-4">
-        <div class="card text-white bg-success">
-            <div class="card-body">
-                <h6 class="card-title">Esta Semana</h6>
-                <h3>{{ "%.2f"|format(summary.this_week) }} EUR</h3>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-4">
-        <div class="card text-white bg-info">
-            <div class="card-body">
-                <h6 class="card-title">Este Mes</h6>
-                <h3>{{ "%.2f"|format(summary.this_month) }} EUR</h3>
-            </div>
-        </div>
-    </div>
-</div>
+<h4>Dashboard <small class="text-muted">{{ month_label }}</small></h4>
 
+{% if driver_kpis %}
+<!-- KPI Comparison Table -->
 <div class="card mb-4">
-    <div class="card-header">Ingresos Diarios (Ultima Semana)</div>
-    <div class="card-body">
-        <canvas id="earningsChart"></canvas>
+    <div class="card-header">Comparativa Conductores — Este Mes</div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-striped table-hover kpi-table mb-0">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Conductor</th>
+                        <th>Dias</th>
+                        <th>Viajes</th>
+                        <th>Prima</th>
+                        <th>FN T3</th>
+                        <th>Uber T3</th>
+                        <th>Total Rec</th>
+                        <th>Tot.Rec.Neta</th>
+                        <th>Km</th>
+                        <th>EUR/km</th>
+                        <th>Prom.Diario</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for d in driver_kpis %}
+                    <tr>
+                        <td>{{ d.driver_name }}</td>
+                        <td>{{ d.dias }}</td>
+                        <td>{{ d.viajes }}</td>
+                        <td>{{ "%.2f"|format(d.prima) }}</td>
+                        <td>{{ "%.2f"|format(d.freenow_t3) }}</td>
+                        <td>{{ "%.2f"|format(d.uber_t3) }}</td>
+                        <td>{{ "%.2f"|format(d.total_rec) }}</td>
+                        <td class="fw-bold">{{ "%.2f"|format(d.total_rec_neta) }}</td>
+                        <td>{{ "%.1f"|format(d.km) }}</td>
+                        <td>{{ "%.2f"|format(d.eur_per_km) }}</td>
+                        <td class="fw-bold">{{ "%.2f"|format(d.promedio_diario) }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
     </div>
 </div>
 
-<!-- Platform Stats -->
-{% if analytics.platform_stats %}
+<!-- Revenue Chart -->
+<div class="card mb-4">
+    <div class="card-header">Recaudacion Neta por Conductor</div>
+    <div class="card-body">
+        <canvas id="revenueChart" height="80"></canvas>
+    </div>
+</div>
+
 <div class="row mb-4">
-    {% for source, stats in analytics.platform_stats.items() %}
-    <div class="col-md-4">
-        <div class="card">
-            <div class="card-header">
-                <span class="badge bg-{{ 'primary' if source == 'uber' else 'success' if source == 'freenow' else 'warning' }}">{{ source|upper }}</span>
-                <span class="text-muted small">(este mes)</span>
-            </div>
-            <div class="card-body p-2">
-                <table class="table table-sm mb-0" style="font-size:0.85rem">
-                    <tr><td class="text-muted">Viajes</td><td class="text-end fw-bold">{{ stats.trips }}</td></tr>
-                    <tr><td class="text-muted">Bruto</td><td class="text-end">{{ stats.gross }} EUR</td></tr>
-                    <tr><td class="text-muted">EUR/km</td><td class="text-end fw-bold text-primary">{{ stats.eur_per_km }}</td></tr>
-                    <tr><td class="text-muted">EUR/hora</td><td class="text-end fw-bold text-success">{{ stats.eur_per_hour }}</td></tr>
+    <!-- Fuel Comparison Table -->
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header">Consumo Gasolina — Este Mes</div>
+            <div class="card-body p-0">
+                <table class="table table-striped table-hover kpi-table mb-0">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Conductor</th>
+                            <th>Coste</th>
+                            <th>Litros</th>
+                            <th>EUR/L</th>
+                            <th>% s/Rec</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for d in driver_kpis %}
+                        <tr>
+                            <td>{{ d.driver_name }}</td>
+                            <td>{{ "%.2f"|format(d.fuel_cost) }}</td>
+                            <td>{{ "%.1f"|format(d.fuel_liters) }}</td>
+                            <td>{{ "%.3f"|format(d.fuel_price_per_liter) }}</td>
+                            <td>{{ "%.1f"|format(d.fuel_pct) }}%</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
                 </table>
             </div>
         </div>
     </div>
-    {% endfor %}
-</div>
-{% endif %}
 
-<!-- Hourly Distribution -->
-{% if analytics.time_slots %}
-<div class="card mb-4">
-    <div class="card-header">Ingresos por Franja Horaria (Este Mes)</div>
-    <div class="card-body">
-        <canvas id="hourlyChart"></canvas>
+    <!-- Fuel Chart -->
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header">Coste Gasolina vs Recaudacion</div>
+            <div class="card-body">
+                <canvas id="fuelChart"></canvas>
+            </div>
+        </div>
     </div>
 </div>
-{% endif %}
 
-<!-- Driver Comparison (admin only) -->
-{% if analytics.driver_comparison %}
-<div class="card mb-4">
-    <div class="card-header">Comparativa Conductores (Este Mes)</div>
-    <div class="card-body p-0">
-        <table class="table table-striped table-hover mb-0" style="font-size:0.9rem">
-            <thead>
-                <tr>
-                    <th>Conductor</th>
-                    <th class="text-end">Viajes</th>
-                    <th class="text-end">Bruto</th>
-                    <th class="text-end">Km</th>
-                    <th class="text-end">EUR/km</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for d in analytics.driver_comparison %}
-                <tr>
-                    <td>{{ d.driver_name }}</td>
-                    <td class="text-end">{{ d.trips }}</td>
-                    <td class="text-end">{{ d.gross }} EUR</td>
-                    <td class="text-end">{{ d.km }}</td>
-                    <td class="text-end fw-bold">{{ d.eur_per_km }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-</div>
-{% endif %}
-
-{% if summary.recent_trips %}
-<div class="card">
-    <div class="card-header">Ultimos Viajes</div>
-    <div class="card-body">
-        <table class="table table-striped">
-            <thead>
-                <tr>
-                    <th>Fecha</th>
-                    <th>Plataforma</th>
-                    <th>Bruto</th>
-                    <th>Neto</th>
-                    <th>Pago</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for trip in summary.recent_trips %}
-                <tr>
-                    <td>{{ trip.started_at.strftime('%d/%m %H:%M') }}</td>
-                    <td><span class="badge bg-{{ 'primary' if trip.source == 'uber' else 'success' if trip.source == 'freenow' else 'warning' }}">{{ trip.source|upper }}</span></td>
-                    <td>{{ "%.2f"|format(trip.gross_amount) }} EUR</td>
-                    <td>{{ "%.2f"|format(trip.payout_amount) }} EUR</td>
-                    <td>{{ trip.payment_method }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-</div>
+{% else %}
+<div class="alert alert-info">No hay conductores activos.</div>
 {% endif %}
 {% endblock %}
 
 {% block scripts %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+{% if driver_kpis %}
 <script>
-const ctx = document.getElementById('earningsChart').getContext('2d');
-new Chart(ctx, {
-    type: 'bar',
-    data: {
-        labels: {{ summary.daily_chart.labels | tojson }},
-        datasets: [{
-            label: 'Ingresos Brutos (EUR)',
-            data: {{ summary.daily_chart.data | tojson }},
-            backgroundColor: 'rgba(54, 162, 235, 0.5)',
-            borderColor: 'rgba(54, 162, 235, 1)',
-            borderWidth: 1
-        }]
-    },
-    options: {
-        scales: {
-            y: { beginAtZero: true }
-        }
-    }
-});
+const kpis = {{ driver_kpis | tojson }};
+const names = kpis.map(d => d.driver_name.split(' ').slice(0, 2).join(' '));
+const colors = ['rgba(54,162,235,0.7)', 'rgba(75,192,192,0.7)', 'rgba(255,159,64,0.7)', 'rgba(153,102,255,0.7)'];
+const borderColors = ['rgba(54,162,235,1)', 'rgba(75,192,192,1)', 'rgba(255,159,64,1)', 'rgba(153,102,255,1)'];
 
-{% if analytics.time_slots %}
-const hCtx = document.getElementById('hourlyChart').getContext('2d');
-const slots = {{ analytics.time_slots | tojson }};
-new Chart(hCtx, {
+// Revenue stacked bar chart
+new Chart(document.getElementById('revenueChart'), {
     type: 'bar',
     data: {
-        labels: slots.map(s => s.label),
+        labels: names,
         datasets: [
             {
-                label: 'Ingresos (EUR)',
-                data: slots.map(s => s.gross),
-                backgroundColor: 'rgba(75, 192, 192, 0.5)',
-                borderColor: 'rgba(75, 192, 192, 1)',
+                label: 'Prima',
+                data: kpis.map(d => d.prima),
+                backgroundColor: 'rgba(255,193,7,0.7)',
+                borderColor: 'rgba(255,193,7,1)',
                 borderWidth: 1,
-                yAxisID: 'y',
             },
             {
-                label: 'Viajes',
-                data: slots.map(s => s.trips),
-                type: 'line',
-                borderColor: 'rgba(255, 99, 132, 1)',
-                backgroundColor: 'rgba(255, 99, 132, 0.2)',
-                yAxisID: 'y1',
-                tension: 0.3,
+                label: 'FreeNow T3',
+                data: kpis.map(d => d.freenow_t3),
+                backgroundColor: 'rgba(40,167,69,0.7)',
+                borderColor: 'rgba(40,167,69,1)',
+                borderWidth: 1,
+            },
+            {
+                label: 'Uber T3',
+                data: kpis.map(d => d.uber_t3),
+                backgroundColor: 'rgba(0,0,0,0.7)',
+                borderColor: 'rgba(0,0,0,1)',
+                borderWidth: 1,
             },
         ]
     },
     options: {
+        responsive: true,
+        plugins: { legend: { position: 'top' } },
         scales: {
-            y: { beginAtZero: true, position: 'left', title: { display: true, text: 'EUR' }},
-            y1: { beginAtZero: true, position: 'right', grid: { drawOnChartArea: false }, title: { display: true, text: 'Viajes' }},
+            x: { stacked: true },
+            y: { stacked: true, beginAtZero: true, title: { display: true, text: 'EUR' } }
         }
     }
 });
-{% endif %}
+
+// Fuel chart
+new Chart(document.getElementById('fuelChart'), {
+    type: 'bar',
+    data: {
+        labels: names,
+        datasets: [
+            {
+                label: 'Coste Gasolina (EUR)',
+                data: kpis.map(d => d.fuel_cost),
+                backgroundColor: 'rgba(220,53,69,0.7)',
+                borderColor: 'rgba(220,53,69,1)',
+                borderWidth: 1,
+                yAxisID: 'y',
+            },
+            {
+                label: '% sobre Recaudacion',
+                data: kpis.map(d => d.fuel_pct),
+                type: 'line',
+                borderColor: 'rgba(255,159,64,1)',
+                backgroundColor: 'rgba(255,159,64,0.2)',
+                pointRadius: 5,
+                yAxisID: 'y1',
+                tension: 0,
+            },
+        ]
+    },
+    options: {
+        responsive: true,
+        plugins: { legend: { position: 'top' } },
+        scales: {
+            y: { beginAtZero: true, position: 'left', title: { display: true, text: 'EUR' } },
+            y1: { beginAtZero: true, position: 'right', grid: { drawOnChartArea: false }, title: { display: true, text: '%' } },
+        }
+    }
+});
 </script>
+{% endif %}
 {% endblock %}
