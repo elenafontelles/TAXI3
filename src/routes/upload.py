@@ -17,6 +17,7 @@ from src.models.fuel_expense import FuelExpense
 from src.models.tpv_daily_total import TpvDailyTotal
 from src.models.uber_daily_summary import UberDailySummary
 from src.models.other_expense import OtherExpense
+from src.models.freenow_adjustment import FreenowAdjustment
 from src.template_config import templates
 
 logger = logging.getLogger(__name__)
@@ -599,6 +600,58 @@ async def add_other_expense(
     return await _render_result(
         request, session, user,
         success=f"Gasto registrado: {fecha} - {importe:.2f} EUR - {concepto}",
+    )
+
+
+@router.post("/upload/freenow-ajustes", response_class=HTMLResponse)
+async def add_freenow_adjustment(
+    request: Request,
+    user: dict = Depends(require_admin),
+    driver_id: str = Form(...),
+    fecha_otros: str = Form(""),
+    importe_otros: float = Form(0),
+    fecha_incentivos: str = Form(""),
+    importe_incentivos: float = Form(0),
+    session: Session = Depends(get_session),
+):
+    """Add FreeNow adjustment entries (otros / incentivos)."""
+    from datetime import datetime as dt
+    from decimal import Decimal
+
+    created = []
+
+    for label, fecha, importe, adj_type in [
+        ("Otros", fecha_otros, importe_otros, "otros"),
+        ("Incentivos", fecha_incentivos, importe_incentivos, "incentivos"),
+    ]:
+        if not fecha or not importe:
+            continue
+        try:
+            expense_date = dt.strptime(fecha.strip(), "%d/%m/%y").date()
+        except ValueError:
+            return await _render_result(
+                request, session, user,
+                error=f"Formato de fecha incorrecto en {label}. Usa DD/MM/YY",
+            )
+        adj = FreenowAdjustment(
+            date=expense_date,
+            driver_id=driver_id,
+            amount=Decimal(str(importe)),
+            adjustment_type=adj_type,
+        )
+        session.add(adj)
+        created.append(f"{label}: {fecha} - {importe:.2f} EUR")
+
+    if not created:
+        return await _render_result(
+            request, session, user,
+            error="Introduce al menos un importe con su fecha",
+        )
+
+    session.commit()
+    return await _render_result(
+        request, session, user,
+        success=f"Ajustes FreeNow registrados: {', '.join(created)}",
     )
 
 

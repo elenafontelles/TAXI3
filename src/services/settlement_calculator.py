@@ -82,6 +82,7 @@ def calculate_daily_settlement(
     fuel_total: Decimal,
     other_expenses_total: Decimal,
     driver_config: dict,
+    freenow_adjustments: Decimal = Decimal("0.00"),
 ) -> dict:
     """Calculate complete daily settlement for a driver.
 
@@ -98,6 +99,7 @@ def calculate_daily_settlement(
         fuel_total: Total fuel expenses
         other_expenses_total: Total other expenses
         driver_config: Dict with driver commission settings:
+        freenow_adjustments: FreeNow otros/incentivos adjustments (net, added to freenow_fixed)
             - prima_base_pct: Base driver percentage
             - prima_bonus_pct: Bonus percentage above threshold
             - commission_threshold: Threshold for bonus percentage
@@ -115,6 +117,9 @@ def calculate_daily_settlement(
         freenow_fixed = calculate_freenow_net(freenow_fixed_bruto) + freenow_fixed_tips
     else:
         freenow_fixed = freenow_fixed_bruto + freenow_fixed_tips
+
+    # Add FreeNow adjustments (otros/incentivos) — net amounts, no commission
+    freenow_fixed = freenow_fixed + freenow_adjustments
 
     # Recaudacion total = prima + freenow_fixed (net or bruto) + uber_t3_fixed
     recaudacion_total = prima_amount + freenow_fixed + uber_t3_fixed
@@ -167,6 +172,7 @@ def calculate_daily_settlement(
     return {
         "prima_amount": prima_amount,
         "freenow_fixed_bruto": freenow_fixed_bruto,
+        "freenow_adjustments": freenow_adjustments,
         "freenow_fixed": freenow_fixed,
         "uber_t3_fixed": uber_t3_fixed,
         "recaudacion_total": recaudacion_total,

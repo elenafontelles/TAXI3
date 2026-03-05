@@ -16,6 +16,7 @@ from src.models.tpv_daily_total import TpvDailyTotal
 from src.models.uber_daily_summary import UberDailySummary
 from src.models.fuel_expense import FuelExpense
 from src.models.other_expense import OtherExpense
+from src.models.freenow_adjustment import FreenowAdjustment
 from src.models.vehicle import Vehicle
 from src.models.pending_validation import PendingValidation
 from src.services.settlement_calculator import calculate_daily_settlement
@@ -237,6 +238,13 @@ def _get_daily_data(session: Session, driver_id: str, vehicle: Vehicle | None,
     ).scalar()
     other_expenses_total = Decimal(str(other_result)) if other_result else Decimal("0.00")
 
+    # FreeNow adjustments (otros/incentivos) by driver_id
+    freenow_adj_result = session.query(func.sum(FreenowAdjustment.amount)).filter(
+        FreenowAdjustment.date == current,
+        FreenowAdjustment.driver_id == driver_id,
+    ).scalar()
+    freenow_adjustments = Decimal(str(freenow_adj_result)) if freenow_adj_result else Decimal("0.00")
+
     return {
         "prima_amount": prima_amount,
         "freenow_fixed_bruto": freenow_fixed_bruto,
@@ -249,6 +257,7 @@ def _get_daily_data(session: Session, driver_id: str, vehicle: Vehicle | None,
         "uber_total_payment": uber_total_payment,
         "fuel_total": fuel_total,
         "other_expenses_total": other_expenses_total,
+        "freenow_adjustments": freenow_adjustments,
     }
 
 
@@ -285,7 +294,7 @@ def _calculate_range(session, driver, vehicle, license_number, sd, ed,
 
 
 TOTAL_KEYS = [
-    "prima_amount", "freenow_fixed_bruto", "freenow_fixed", "uber_t3_fixed",
+    "prima_amount", "freenow_fixed_bruto", "freenow_adjustments", "freenow_fixed", "uber_t3_fixed",
     "recaudacion_total", "incidents_amount", "recaudacion_neta",
     "tpv_visa_total", "freenow_app", "uber_total_payment", "cash",
     "iva", "parte_proporcional",
