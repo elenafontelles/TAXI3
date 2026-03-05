@@ -633,6 +633,12 @@ async def add_freenow_adjustment(
                 request, session, user,
                 error=f"Formato de fecha incorrecto en {label}. Usa DD/MM/YY",
             )
+        # Replace existing record for same driver+date+type
+        session.query(FreenowAdjustment).filter_by(
+            driver_id=driver_id,
+            date=expense_date,
+            adjustment_type=adj_type,
+        ).delete()
         adj = FreenowAdjustment(
             date=expense_date,
             driver_id=driver_id,

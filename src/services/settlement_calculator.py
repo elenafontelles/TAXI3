@@ -148,10 +148,11 @@ def calculate_daily_settlement(
 
     # 7. FreeNow APP: si comision driver = 0, propietario asume comision
     #    Tips added AFTER commission (no commission on tips)
+    #    Adjustments (otros/incentivos) are paid via transfer, count as app payment
     if freenow_commission_driver_pct == 0:
-        freenow_app = freenow_app_paid_bruto + freenow_app_tips
+        freenow_app = freenow_app_paid_bruto + freenow_app_tips + freenow_adjustments
     else:
-        freenow_app = calculate_freenow_net(freenow_app_paid_bruto) + freenow_app_tips
+        freenow_app = calculate_freenow_net(freenow_app_paid_bruto) + freenow_app_tips + freenow_adjustments
 
     # 8. Anticipado = recaudacion_neta - tpv_visa - freenow_app - uber_total_payment
     #               - otros_gastos - gasolina (si fuel_deducted_from_driver)
