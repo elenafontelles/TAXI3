@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DESCRIPCION FUNCIONAL</title>
+<style>
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 20px 40px;
+    color: #24292e;
+    line-height: 1.6;
+    font-size: 14px;
+  }
+  h1 { border-bottom: 2px solid #0366d6; padding-bottom: 8px; font-size: 28px; }
+  h2 { border-bottom: 1px solid #eaecef; padding-bottom: 6px; margin-top: 32px; font-size: 22px; color: #0366d6; }
+  h3 { margin-top: 24px; font-size: 17px; }
+  h4 { font-size: 15px; }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 16px 0;
+    font-size: 13px;
+  }
+  th, td {
+    border: 1px solid #dfe2e5;
+    padding: 6px 12px;
+    text-align: left;
+  }
+  th {
+    background: #f1f3f5;
+    font-weight: 600;
+  }
+  tr:nth-child(even) { background: #f8f9fa; }
+  code {
+    background: #f3f4f6;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 13px;
+  }
+  pre {
+    background: #f6f8fa;
+    padding: 12px 16px;
+    border-radius: 6px;
+    overflow-x: auto;
+    font-size: 13px;
+    border: 1px solid #e1e4e8;
+  }
+  pre.mermaid {
+    background: white;
+    text-align: center;
+    border: 1px solid #e1e4e8;
+    padding: 20px;
+  }
+  hr { border: none; border-top: 1px solid #eaecef; margin: 24px 0; }
+
+  @media print {
+    body { font-size: 11px; padding: 0; max-width: 100%; }
+    h1 { font-size: 22px; }
+    h2 { font-size: 17px; page-break-before: auto; }
+    h3 { font-size: 14px; }
+    table { font-size: 10px; }
+    pre { font-size: 10px; }
+    pre.mermaid { page-break-inside: avoid; }
+    .no-print { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="no-print" style="background:#0366d6;color:white;padding:12px 20px;border-radius:6px;margin-bottom:20px;display:flex;justify-content:space-between;align-items:center;">
+  <span>DESCRIPCION FUNCIONAL</span>
+  <button onclick="window.print()" style="background:white;color:#0366d6;border:none;padding:8px 20px;border-radius:4px;cursor:pointer;font-weight:bold;">
+    Imprimir / Guardar PDF
+  </button>
+</div>
+
+<h1 id="taxi2-descripcion-funcional-del-producto">TAXI2 - Descripcion Funcional del Producto</h1>
+<p><strong>Version</strong>: 1.0
+<strong>Fecha</strong>: Febrero 2026
+<strong>Autor</strong>: Producto</p>
+<hr />
+<h2 id="1-vision-general">1. Vision General</h2>
+<p>TAXI2 es una plataforma de gestion integral para flotas de taxi que resuelve un problema critico del sector: <strong>el calculo diario de la liquidacion entre propietario y conductor</strong>.</p>
+<p>Un propietario de licencias de taxi trabaja con varios conductores que operan en multiples plataformas simultaneamente (taximetro propio, FreeNow, Uber). Cada dia, el conductor recauda dinero en efectivo, por tarjeta y a traves de apps. Al final de cada periodo, propietario y conductor deben ajustar cuentas: cuanto ha recaudado el conductor, cuanto le corresponde segun su porcentaje, cuanto ha adelantado ya, y cuanto queda pendiente.</p>
+<p><strong>Antes de TAXI2</strong>, este proceso se hacia manualmente con hojas de calculo, cruzando datos de 6 fuentes distintas. Era lento, propenso a errores y generaba conflictos.</p>
+<p><strong>Con TAXI2</strong>, todo el proceso esta automatizado: los datos se importan, se cruzan y se calcula la liquidacion al instante.</p>
+<hr />
+<h2 id="2-usuarios-del-sistema">2. Usuarios del Sistema</h2>
+<h3 id="propietario-administrador">Propietario / Administrador</h3>
+<p>El propietario de las licencias de taxi es el usuario principal. Gestiona toda la operativa:</p>
+<ul>
+<li>Sube los archivos de datos de cada plataforma</li>
+<li>Lanza la descarga automatica de datos desde FreeNow y Prima</li>
+<li>Calcula las liquidaciones de cada conductor</li>
+<li>Exporta los informes para entregarlos a los conductores</li>
+<li>Consulta el dashboard de rendimiento mensual</li>
+<li>Valida las incidencias detectadas automaticamente</li>
+<li>Gestiona los datos de conductores y vehiculos</li>
+</ul>
+<h3 id="conductor">Conductor</h3>
+<p>Los conductores tienen acceso limitado al sistema para consultar su propia informacion:</p>
+<ul>
+<li>Ven el dashboard con sus KPIs del mes en curso</li>
+<li>Consultan su historial de viajes</li>
+</ul>
+<hr />
+<h2 id="3-modulos-funcionales">3. Modulos Funcionales</h2>
+<h3 id="31-dashboard-panel-de-control-mensual">3.1 Dashboard - Panel de Control Mensual</h3>
+<p><strong>Que es</strong>: La pantalla principal del sistema. Muestra una comparativa mensual del rendimiento de todos los conductores.</p>
+<p><strong>Para que sirve</strong>: Permite al propietario ver de un vistazo como va el mes, comparar conductores entre si y detectar tendencias.</p>
+<p><strong>Que informacion muestra</strong>:</p>
+<ul>
+<li><strong>Ingresos por plataforma</strong>: Cuanto ha recaudado cada conductor en Prima (taximetro), FreeNow y Uber, con el total neto</li>
+<li><strong>Dias trabajados y viajes realizados</strong>: Actividad de cada conductor</li>
+<li><strong>Kilometros recorridos</strong>: Km ocupados (con pasajero) y km en vacio, con la tasa de ocupacion</li>
+<li><strong>Eficiencia</strong>: Euros por kilometro, euros por viaje y promedio diario</li>
+<li><strong>Mix de plataformas</strong>: Que porcentaje del ingreso viene de cada plataforma (grafico de barras)</li>
+<li><strong>Combustible</strong>: Gasto total, litros consumidos, precio por litro, porcentaje del combustible sobre la recaudacion y coste por km</li>
+</ul>
+<p><strong>Periodo</strong>: Siempre muestra el mes en curso (del dia 1 hasta hoy).</p>
+<hr />
+<h3 id="32-subir-archivos-importacion-de-datos">3.2 Subir Archivos - Importacion de Datos</h3>
+<p><strong>Que es</strong>: La pantalla donde el administrador sube los archivos de datos de cada plataforma.</p>
+<p><strong>Para que sirve</strong>: Alimentar al sistema con los datos necesarios para calcular las liquidaciones.</p>
+<p><strong>Archivos que se pueden subir</strong>:</p>
+<table>
+<thead>
+<tr>
+<th>Archivo</th>
+<th>Plataforma</th>
+<th>Que contiene</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>CSV de FreeNow</td>
+<td>FreeNow</td>
+<td>Todos los viajes realizados a traves de la app FreeNow</td>
+</tr>
+<tr>
+<td>CSV de Prima</td>
+<td>Prima (Taxitronic)</td>
+<td>Todos los viajes registrados en el taximetro</td>
+</tr>
+<tr>
+<td>CSV de Uber</td>
+<td>Uber</td>
+<td>Resumen diario de pagos de Uber</td>
+</tr>
+<tr>
+<td>Extracto La Caixa</td>
+<td>Banco (XLSX)</td>
+<td>Movimientos bancarios con los cobros de tarjeta VISA del TPV del taxi</td>
+</tr>
+<tr>
+<td>CSV Petroprix</td>
+<td>Gasolinera</td>
+<td>Repostajes de combustible en Petroprix</td>
+</tr>
+<tr>
+<td>XLSX Repsol/Solred</td>
+<td>Gasolinera</td>
+<td>Repostajes de combustible en Repsol</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Como funciona</strong>:</p>
+<ol>
+<li>Seleccionar la plataforma en el desplegable</li>
+<li>Opcionalmente, seleccionar conductor y vehiculo (si no, el sistema los detecta automaticamente)</li>
+<li>Arrastrar el archivo o seleccionarlo manualmente</li>
+<li>Pulsar "Subir y Procesar"</li>
+</ol>
+<p><strong>Comportamiento de reemplazo</strong>: Si se sube un archivo que cubre un rango de fechas que ya tiene datos, los datos anteriores se reemplazan por los nuevos. Esto permite corregir errores simplemente volviendo a subir el archivo correcto.</p>
+<p><strong>Deteccion automatica</strong>: El sistema identifica automaticamente a que conductor y vehiculo pertenece cada registro del archivo, cruzando nombres, matriculas y numeros de licencia.</p>
+<h4 id="entrada-manual-otros-gastos">Entrada manual: Otros Gastos</h4>
+<p>Debajo del formulario de subida hay un apartado para registrar gastos extraordinarios de un conductor (ej: pinchazo, lavado, peaje). Se introduce:
+- Conductor
+- Fecha
+- Importe
+- Concepto</p>
+<p>Estos gastos se descuentan del anticipado en la liquidacion.</p>
+<h4 id="entrada-manual-otros-incentivos-freenow">Entrada manual: Otros / Incentivos FreeNow</h4>
+<p>Apartado para registrar importes adicionales de FreeNow que no aparecen en el CSV de viajes:
+- <strong>Otros</strong>: Cargos o descuentos adicionales de FreeNow
+- <strong>Incentivos</strong>: Bonificaciones o promociones de FreeNow</p>
+<p>Cada valor se introduce con su fecha e importe. Si se introduce un nuevo valor para un dia que ya tiene datos, el nuevo <strong>sustituye</strong> al anterior (no se acumulan). Se puede poner 0 para eliminar un importe previo.</p>
+<p>Estos importes se suman tanto al campo "FreenowT3" como al campo "AppFN" en la liquidacion.</p>
+<hr />
+<h3 id="33-sincronizacion-descarga-automatica-de-datos">3.3 Sincronizacion - Descarga Automatica de Datos</h3>
+<p><strong>Que es</strong>: Pantalla para lanzar la descarga automatica de datos desde los portales web de FreeNow y Prima.</p>
+<p><strong>Para que sirve</strong>: Evitar tener que descargar manualmente los archivos CSV desde cada portal. El sistema entra automaticamente en los portales, descarga los datos y los importa.</p>
+<p><strong>Plataformas con descarga automatica</strong>:</p>
+<table>
+<thead>
+<tr>
+<th>Boton</th>
+<th>Que hace</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Sincronizar FreeNow 092/1061</strong></td>
+<td>Descarga los viajes de la cuenta FreeNow que gestiona las licencias 092 y 1061</td>
+</tr>
+<tr>
+<td><strong>Sincronizar FreeNow 361</strong></td>
+<td>Descarga los viajes de la segunda cuenta FreeNow (licencia 361)</td>
+</tr>
+<tr>
+<td><strong>Sincronizar Prima</strong></td>
+<td>Descarga los viajes del taximetro desde el portal Prima/Taxitronic</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Como funciona</strong>:</p>
+<ol>
+<li>Seleccionar el rango de fechas (por defecto, la ultima semana)</li>
+<li>Pulsar el boton de la plataforma deseada</li>
+<li>El sistema lanza un proceso en segundo plano que:</li>
+<li>Abre un navegador automatizado</li>
+<li>Inicia sesion en el portal</li>
+<li>Navega hasta la seccion de descarga</li>
+<li>Configura las fechas</li>
+<li>Descarga el archivo</li>
+<li>Lo importa automaticamente</li>
+<li>El estado aparece en el historial de sincronizaciones</li>
+</ol>
+<p><strong>Informacion mostrada</strong>:
+- Estado de la ultima sincronizacion de cada plataforma
+- Archivos descargados (con opcion de ver su contenido)
+- Historial de sincronizaciones con resultado (exito/error, registros creados/omitidos)</p>
+<hr />
+<h3 id="34-liquidacion-calculo-de-liquidacion-conductor-propietario">3.4 Liquidacion - Calculo de Liquidacion Conductor-Propietario</h3>
+<p><strong>Que es</strong>: El modulo central del sistema. Calcula cuanto debe cobrar o pagar cada conductor al propietario por un periodo determinado.</p>
+<p><strong>Para que sirve</strong>: Automatizar el ajuste de cuentas diario entre propietario y conductor.</p>
+<h4 id="como-se-usa">Como se usa</h4>
+<ol>
+<li>Seleccionar el conductor</li>
+<li>Seleccionar el rango de fechas</li>
+<li>Opcionalmente, ajustar la hora de inicio del primer dia (por defecto 00:00)</li>
+<li>El sistema muestra una tabla con el desglose dia a dia</li>
+</ol>
+<h4 id="que-muestra-la-tabla-de-liquidacion">Que muestra la tabla de liquidacion</h4>
+<p>Para cada dia se calculan y muestran los siguientes campos:</p>
+<table>
+<thead>
+<tr>
+<th>Campo</th>
+<th>Que significa</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Prima</strong></td>
+<td>Lo recaudado en el taximetro (viajes de calle y de app que pasan por taximetro)</td>
+</tr>
+<tr>
+<td><strong>Inc</strong> (Incidencias)</td>
+<td>Importe de viajes detectados como posibles tiquets nulos, que se restan de la recaudacion</td>
+</tr>
+<tr>
+<td><strong>FreenowT3</strong></td>
+<td>Lo recaudado a traves de FreeNow (viajes con tarifa fija + ajustes manuales). Si el conductor asume la comision de FreeNow, ya esta descontada</td>
+</tr>
+<tr>
+<td><strong>Uber T3</strong></td>
+<td>Lo recaudado a traves de Uber</td>
+</tr>
+<tr>
+<td><strong>Rec. Neta</strong></td>
+<td>Recaudacion neta del dia: Prima + FreenowT3 + Uber T3 - Incidencias</td>
+</tr>
+<tr>
+<td><strong>%</strong></td>
+<td>Porcentaje que le corresponde al conductor (40% o 45% segun el umbral)</td>
+</tr>
+<tr>
+<td><strong>TPV</strong></td>
+<td>Total cobrado por tarjeta/VISA en el taxi (dato del extracto bancario La Caixa)</td>
+</tr>
+<tr>
+<td><strong>App FN</strong></td>
+<td>Lo que FreeNow ha pagado por transferencia (viajes pagados por app + ajustes manuales)</td>
+</tr>
+<tr>
+<td><strong>App Uber</strong></td>
+<td>Lo que Uber ha pagado por transferencia</td>
+</tr>
+<tr>
+<td><strong>Cash</strong></td>
+<td>Efectivo que tiene el conductor en mano al final del dia</td>
+</tr>
+<tr>
+<td><strong>IVA</strong></td>
+<td>IVA (10%) incluido en la recaudacion neta</td>
+</tr>
+<tr>
+<td><strong>Parte Prop.</strong></td>
+<td>La parte proporcional que le corresponde al conductor: base imponible x su porcentaje</td>
+</tr>
+<tr>
+<td><strong>Gasolina</strong></td>
+<td>Gasto en combustible del dia</td>
+</tr>
+<tr>
+<td><strong>Otros</strong></td>
+<td>Otros gastos registrados manualmente</td>
+</tr>
+<tr>
+<td><strong>Anticipado</strong></td>
+<td>Lo que el conductor ya ha adelantado al propietario (recaudacion neta menos lo cobrado por app, tarjeta y gastos)</td>
+</tr>
+<tr>
+<td><strong>Liquidacion</strong></td>
+<td><strong>Resultado final</strong>: Parte proporcional - Anticipado</td>
+</tr>
+</tbody>
+</table>
+<h4 id="interpretacion-del-resultado">Interpretacion del resultado</h4>
+<ul>
+<li><strong>Liquidacion positiva</strong>: El conductor ha adelantado mas de lo que le corresponde. <strong>El propietario le debe dinero.</strong></li>
+<li><strong>Liquidacion negativa</strong>: El conductor ha recaudado mas de lo que le corresponde (normalmente en efectivo). <strong>El conductor debe dinero al propietario.</strong></li>
+</ul>
+<p>Al final de la tabla se muestra una <strong>fila de totales</strong> con la suma de todo el periodo.</p>
+<h4 id="configuracion-por-conductor">Configuracion por conductor</h4>
+<p>Cada conductor tiene su propia configuracion de comisiones, que se establece en la pantalla de Administracion:</p>
+<table>
+<thead>
+<tr>
+<th>Parametro</th>
+<th>Descripcion</th>
+<th>Ejemplo</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Porcentaje base</strong></td>
+<td>Porcentaje del conductor cuando no alcanza el umbral</td>
+<td>40%</td>
+</tr>
+<tr>
+<td><strong>Porcentaje bonus</strong></td>
+<td>Porcentaje del conductor cuando supera el umbral</td>
+<td>45%</td>
+</tr>
+<tr>
+<td><strong>Umbral</strong></td>
+<td>Recaudacion neta diaria a partir de la cual se aplica el bonus</td>
+<td>300 EUR</td>
+</tr>
+<tr>
+<td><strong>Comision FreeNow</strong></td>
+<td>Quien asume la comision de FreeNow (0% = propietario, 100% = conductor)</td>
+<td>0% o 100%</td>
+</tr>
+<tr>
+<td><strong>Gasolina descontada</strong></td>
+<td>Si la gasolina se descuenta del anticipado del conductor</td>
+<td>Si / No</td>
+</tr>
+</tbody>
+</table>
+<h4 id="exportacion">Exportacion</h4>
+<p>Desde la pantalla de liquidacion se puede exportar el informe en dos formatos:</p>
+<ul>
+<li><strong>Excel (.xlsx)</strong>: Archivo con las mismas 17 columnas, formateado con cabeceras en azul y fila de totales</li>
+<li><strong>PDF</strong>: Documento en formato apaisado A4, listo para imprimir y entregar al conductor</li>
+</ul>
+<hr />
+<h3 id="35-viajes-consulta-de-viajes">3.5 Viajes - Consulta de Viajes</h3>
+<p><strong>Que es</strong>: Listado paginado de todos los viajes registrados en el sistema.</p>
+<p><strong>Para que sirve</strong>: Consultar el detalle de viajes individuales, buscar viajes concretos y verificar que los datos importados son correctos.</p>
+<p><strong>Filtros disponibles</strong>:
+- Rango de fechas
+- Plataforma (Prima, FreeNow, Uber)
+- Conductor (solo para administradores; los conductores solo ven los suyos)</p>
+<p><strong>Informacion por viaje</strong>: Fecha/hora, plataforma (con etiqueta de color), conductor, importe bruto e importe neto.</p>
+<p><strong>Ordenacion</strong>: Se puede ordenar por cualquier columna haciendo clic en la cabecera.</p>
+<hr />
+<h3 id="36-validacion-de-incidencias">3.6 Validacion de Incidencias</h3>
+<p><strong>Que es</strong>: Cola de revision de viajes sospechosos detectados automaticamente.</p>
+<p><strong>Para que sirve</strong>: Revisar los viajes que el sistema ha identificado como posibles tiquets nulos (el taximetro se abrio y cerro sin realizar un viaje real).</p>
+<p><strong>Criterio de deteccion</strong>: Un viaje se marca como sospechoso si tiene 0 km recorridos y duro menos de 30 segundos.</p>
+<p><strong>Como funciona</strong>:</p>
+<ol>
+<li>Al importar datos de Prima, el sistema detecta automaticamente estos viajes</li>
+<li>Aparecen en la pantalla de Validacion como "pendientes"</li>
+<li>El administrador revisa cada uno y decide:</li>
+<li><strong>Valido</strong>: Es una incidencia real (tiquet nulo). Su importe se restara de la recaudacion en la liquidacion.</li>
+<li><strong>Invalido</strong>: No es una incidencia (fue un viaje legitimo). Se ignora en la liquidacion.</li>
+</ol>
+<hr />
+<h3 id="37-administracion-gestion-de-conductores-y-vehiculos">3.7 Administracion - Gestion de Conductores y Vehiculos</h3>
+<p><strong>Que es</strong>: Pantalla de gestion de los datos maestros del sistema.</p>
+<p><strong>Conductores - datos editables</strong>:
+- Nombre, email, telefono
+- Numero de licencia (formato: "361 - 0397MSS")
+- Porcentaje base y bonus
+- Umbral de comision
+- Porcentaje de comision FreeNow que asume el conductor
+- Si la gasolina se descuenta del conductor</p>
+<p><strong>Vehiculos - datos editables</strong>:
+- Matricula
+- Numero de licencia
+- Marca, modelo y año</p>
+<hr />
+<h3 id="38-exportacion-de-datos">3.8 Exportacion de Datos</h3>
+<p><strong>Que es</strong>: Pantalla para descargar datos en formato CSV.</p>
+<p><strong>Opciones de exportacion</strong>:
+- <strong>Viajes</strong>: Exporta el listado de viajes filtrado por fecha y conductor
+- <strong>Resumen diario</strong>: Exporta un resumen agregado por dia con totales de viajes, km, bruto, comision y neto</p>
+<hr />
+<h3 id="39-resumen-vista-resumida">3.9 Resumen - Vista Resumida</h3>
+<p><strong>Que es</strong>: Vista de resumen diario con KPIs agregados.</p>
+<p><strong>Que muestra</strong>:
+- Tarjetas resumen: total de viajes, recaudacion bruta, comision total, km totales
+- Tabla con desglose diario por conductor y vehiculo</p>
+<hr />
+<h2 id="4-conceptos-clave-del-negocio">4. Conceptos Clave del Negocio</h2>
+<h3 id="41-plataformas-y-sus-roles">4.1 Plataformas y sus roles</h3>
+<pre><code>TAXIMETRO (Prima)
+  El taximetro registra TODOS los viajes: los de calle, los de FreeNow
+  y los de Uber. Es la fuente principal de datos de actividad.
+
+FREENOW
+  App de movilidad. El pasajero pide un taxi por la app.
+  Dos modalidades:
+  - FIXED: FreeNow cobra una tarifa fija al pasajero. El taximetro
+    no se usa para el cobro (aunque puede registrar el viaje).
+    Este importe se suma a la recaudacion.
+  - METERED: FreeNow conecta al pasajero pero el cobro va por
+    taximetro. El importe ya esta en Prima, NO se suma otra vez.
+
+  Comision FreeNow: 12,5% del importe bruto + 21% IVA sobre la comision.
+  Segun la configuracion, la asume el propietario o el conductor.
+
+UBER
+  Similar a FreeNow. Los datos se importan como resumen diario
+  (no viaje a viaje). Se usa el campo &quot;T3 fijo&quot; como importe
+  que suma a la recaudacion.
+
+LA CAIXA (TPV/VISA)
+  El extracto bancario muestra los cobros diarios por tarjeta
+  en el taxi. Este dato es necesario para calcular el efectivo
+  que tiene el conductor.
+
+COMBUSTIBLE (Petroprix / Repsol)
+  Los repostajes se importan para controlar el gasto en gasolina
+  y, si esta configurado, descontarlo del anticipado del conductor.
+</code></pre>
+<h3 id="42-el-ciclo-de-la-liquidacion">4.2 El ciclo de la liquidacion</h3>
+<pre><code>    CONDUCTOR TRABAJA UN DIA
+            |
+            v
+    Recauda dinero de 3 fuentes:
+    - Efectivo de pasajeros de calle
+    - Pagos por tarjeta (TPV)
+    - Viajes de FreeNow y Uber (pagados por app)
+            |
+            v
+    Al final del dia:
+    - Parte del dinero ya esta &quot;adelantado&quot;:
+      * Lo cobrado por tarjeta (TPV) va al banco del propietario
+      * Lo cobrado por FreeNow app va por transferencia
+      * Lo cobrado por Uber va por transferencia
+    - El conductor tiene en mano el EFECTIVO
+            |
+            v
+    LIQUIDACION:
+    1. Se suma todo lo recaudado (recaudacion neta)
+    2. Se calcula la parte que le corresponde al conductor
+       (su porcentaje sobre la base imponible)
+    3. Se resta lo que ya ha &quot;adelantado&quot; (TPV + apps + gastos)
+    4. La diferencia es la LIQUIDACION:
+       - Si es positiva: el propietario le paga al conductor
+       - Si es negativa: el conductor paga al propietario
+         (normalmente entregando parte del efectivo)
+</code></pre>
+<h3 id="43-cuentas-freenow">4.3 Cuentas FreeNow</h3>
+<p>El sistema gestiona dos cuentas de FreeNow porque las licencias de taxi estan repartidas:</p>
+<table>
+<thead>
+<tr>
+<th>Cuenta</th>
+<th>Licencias</th>
+<th>Conductores</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Cuenta 1</td>
+<td>092, 1061</td>
+<td>Los asignados a estas licencias</td>
+</tr>
+<tr>
+<td>Cuenta 2</td>
+<td>361</td>
+<td>Los asignados a esta licencia</td>
+</tr>
+</tbody>
+</table>
+<p>Los CSV de cada cuenta se suben por separado, y la sincronizacion automatica tiene botones independientes para cada una.</p>
+<h3 id="44-deteccion-de-incidencias">4.4 Deteccion de incidencias</h3>
+<p>El sistema detecta automaticamente viajes que podrian ser "tiquets nulos": el taximetro se inicio y se cerro inmediatamente sin recorrer distancia. Estos viajes generan un importe en el taximetro que no corresponde a un servicio real.</p>
+<p>Criterio: <strong>0 km recorridos</strong> y <strong>duracion menor a 30 segundos</strong>.</p>
+<p>Estos viajes quedan pendientes de revision. Si el administrador los confirma como incidencia, su importe se resta de la recaudacion del conductor ese dia.</p>
+<hr />
+<h2 id="5-flujo-de-trabajo-tipico">5. Flujo de Trabajo Tipico</h2>
+<h3 id="flujo-mensual-del-administrador">Flujo mensual del administrador</h3>
+<pre><code>INICIO DE MES
+     |
+     v
+Cada dia o cada pocos dias:
+  1. Sincronizar FreeNow (automatico) --&gt; boton en Sincronizacion
+  2. Sincronizar Prima (automatico) --&gt; boton en Sincronizacion
+  3. Revisar incidencias detectadas --&gt; pantalla Validacion
+     |
+     v
+Cuando se recibe el archivo de Uber:
+  4. Subir CSV de Uber --&gt; pantalla Subir Archivos
+     |
+     v
+A final de mes (o del periodo de liquidacion):
+  5. Subir extracto La Caixa (XLSX) --&gt; pantalla Subir Archivos
+  6. Subir datos de combustible --&gt; pantalla Subir Archivos
+  7. Registrar ajustes FreeNow (otros/incentivos) si los hay
+  8. Registrar otros gastos si los hay
+     |
+     v
+  9. Ir a Liquidacion
+  10. Seleccionar conductor y rango de fechas
+  11. Revisar la tabla de liquidacion
+  12. Exportar a Excel o PDF
+  13. Entregar informe al conductor
+     |
+     v
+  14. Consultar el Dashboard para ver el rendimiento comparativo
+</code></pre>
+<h3 id="flujo-diario-del-conductor">Flujo diario del conductor</h3>
+<pre><code>  1. Acceder al sistema con su email y contraseña
+  2. Ver el Dashboard con sus KPIs del mes
+  3. Opcionalmente, consultar sus viajes en la pantalla Viajes
+</code></pre>
+<hr />
+<h2 id="6-glosario">6. Glosario</h2>
+<table>
+<thead>
+<tr>
+<th>Termino</th>
+<th>Definicion</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Prima</strong></td>
+<td>Marca del taximetro (Taxitronic). Se usa como sinonimo de "datos del taximetro"</td>
+</tr>
+<tr>
+<td><strong>FreeNow</strong></td>
+<td>App de movilidad (antes MyTaxi). Los pasajeros piden taxi por la app</td>
+</tr>
+<tr>
+<td><strong>FIXED</strong></td>
+<td>Modalidad de FreeNow donde la tarifa es fija (no usa taximetro para el cobro)</td>
+</tr>
+<tr>
+<td><strong>METERED</strong></td>
+<td>Modalidad de FreeNow donde se usa el taximetro para determinar el precio</td>
+</tr>
+<tr>
+<td><strong>TPV</strong></td>
+<td>Terminal Punto de Venta. El datafono del taxi donde se cobra con tarjeta</td>
+</tr>
+<tr>
+<td><strong>T3</strong></td>
+<td>Tarifa 3. En el contexto de Uber y FreeNow, es el importe que efectivamente se suma a la recaudacion</td>
+</tr>
+<tr>
+<td><strong>Recaudacion</strong></td>
+<td>Total de ingresos del dia por todos los conceptos</td>
+</tr>
+<tr>
+<td><strong>Recaudacion neta</strong></td>
+<td>Recaudacion menos incidencias</td>
+</tr>
+<tr>
+<td><strong>Base imponible</strong></td>
+<td>Recaudacion neta sin IVA</td>
+</tr>
+<tr>
+<td><strong>Parte proporcional</strong></td>
+<td>Lo que le corresponde al conductor: base imponible x su porcentaje</td>
+</tr>
+<tr>
+<td><strong>Anticipado</strong></td>
+<td>Dinero que el conductor ya ha "adelantado" al propietario (cobros que van directamente al propietario: tarjeta, apps, gastos)</td>
+</tr>
+<tr>
+<td><strong>Liquidacion</strong></td>
+<td>Resultado final: parte proporcional - anticipado. Si es positivo, el propietario debe al conductor; si es negativo, el conductor debe al propietario</td>
+</tr>
+<tr>
+<td><strong>Incidencia</strong></td>
+<td>Viaje sospechoso de ser un tiquet nulo (0 km, menos de 30 segundos)</td>
+</tr>
+<tr>
+<td><strong>Comision FreeNow</strong></td>
+<td>12,5% del importe bruto + 21% IVA. La puede asumir el propietario o el conductor segun configuracion</td>
+</tr>
+<tr>
+<td><strong>Umbral de bonus</strong></td>
+<td>Recaudacion neta diaria a partir de la cual el conductor cobra un porcentaje mayor</td>
+</tr>
+<tr>
+<td><strong>Licencia</strong></td>
+<td>Numero de la licencia del taxi (ej: 092, 361, 1061)</td>
+</tr>
+</tbody>
+</table>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+<script>
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'default',
+    securityLevel: 'loose',
+    flowchart: { useMaxWidth: true, htmlLabels: true },
+  });
+</script>
+</body>
+</html>

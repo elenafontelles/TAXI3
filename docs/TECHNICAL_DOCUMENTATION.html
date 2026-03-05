@@ -1,0 +1,2293 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TECHNICAL DOCUMENTATION</title>
+<style>
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 20px 40px;
+    color: #24292e;
+    line-height: 1.6;
+    font-size: 14px;
+  }
+  h1 { border-bottom: 2px solid #0366d6; padding-bottom: 8px; font-size: 28px; }
+  h2 { border-bottom: 1px solid #eaecef; padding-bottom: 6px; margin-top: 32px; font-size: 22px; color: #0366d6; }
+  h3 { margin-top: 24px; font-size: 17px; }
+  h4 { font-size: 15px; }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 16px 0;
+    font-size: 13px;
+  }
+  th, td {
+    border: 1px solid #dfe2e5;
+    padding: 6px 12px;
+    text-align: left;
+  }
+  th {
+    background: #f1f3f5;
+    font-weight: 600;
+  }
+  tr:nth-child(even) { background: #f8f9fa; }
+  code {
+    background: #f3f4f6;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 13px;
+  }
+  pre {
+    background: #f6f8fa;
+    padding: 12px 16px;
+    border-radius: 6px;
+    overflow-x: auto;
+    font-size: 13px;
+    border: 1px solid #e1e4e8;
+  }
+  pre.mermaid {
+    background: white;
+    text-align: center;
+    border: 1px solid #e1e4e8;
+    padding: 20px;
+  }
+  hr { border: none; border-top: 1px solid #eaecef; margin: 24px 0; }
+
+  @media print {
+    body { font-size: 11px; padding: 0; max-width: 100%; }
+    h1 { font-size: 22px; }
+    h2 { font-size: 17px; page-break-before: auto; }
+    h3 { font-size: 14px; }
+    table { font-size: 10px; }
+    pre { font-size: 10px; }
+    pre.mermaid { page-break-inside: avoid; }
+    .no-print { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="no-print" style="background:#0366d6;color:white;padding:12px 20px;border-radius:6px;margin-bottom:20px;display:flex;justify-content:space-between;align-items:center;">
+  <span>TECHNICAL DOCUMENTATION</span>
+  <button onclick="window.print()" style="background:white;color:#0366d6;border:none;padding:8px 20px;border-radius:4px;cursor:pointer;font-weight:bold;">
+    Imprimir / Guardar PDF
+  </button>
+</div>
+
+<h1 id="taxi2-documentacion-tecnica-completa">TAXI2 - Documentacion Tecnica Completa</h1>
+<h2 id="indice">Indice</h2>
+<ol>
+<li><a href="#1-descripcion-funcional">Descripcion Funcional</a></li>
+<li><a href="#2-arquitectura-del-sistema">Arquitectura del Sistema</a></li>
+<li><a href="#3-stack-tecnologico">Stack Tecnologico</a></li>
+<li><a href="#4-modelo-de-datos">Modelo de Datos</a></li>
+<li><a href="#5-flujo-general-de-datos">Flujo General de Datos</a></li>
+<li><a href="#6-ingesta-de-datos-scrapers-automaticos">Ingesta de Datos: Scrapers Automaticos</a></li>
+<li><a href="#7-ingesta-de-datos-carga-manual-de-archivos">Ingesta de Datos: Carga Manual de Archivos</a></li>
+<li><a href="#8-parsers-de-archivos">Parsers de Archivos</a></li>
+<li><a href="#9-calculo-de-liquidacion-settlement">Calculo de Liquidacion (Settlement)</a></li>
+<li><a href="#10-dashboard-de-kpis">Dashboard de KPIs</a></li>
+<li><a href="#11-deteccion-de-incidencias">Deteccion de Incidencias</a></li>
+<li><a href="#12-exportacion-de-datos">Exportacion de Datos</a></li>
+<li><a href="#13-autenticacion-y-seguridad">Autenticacion y Seguridad</a></li>
+<li><a href="#14-api-rest-v1">API REST v1</a></li>
+<li><a href="#15-sistema-de-trabajos-asincronos">Sistema de Trabajos Asincronos</a></li>
+<li><a href="#16-cumplimiento-gdpr">Cumplimiento GDPR</a></li>
+<li><a href="#17-despliegue-y-operaciones">Despliegue y Operaciones</a></li>
+<li><a href="#18-estructura-de-archivos-del-proyecto">Estructura de Archivos del Proyecto</a></li>
+</ol>
+<hr />
+<h2 id="1-descripcion-funcional">1. Descripcion Funcional</h2>
+<p>TAXI2 es un sistema integral de gestion de flotas de taxi que automatiza la recopilacion de datos de viajes desde multiples plataformas, calcula las liquidaciones diarias de los conductores y genera informes financieros. El sistema esta diseñado para propietarios de licencias de taxi que operan con multiples conductores y vehiculos.</p>
+<h3 id="funcionalidades-principales">Funcionalidades principales</h3>
+<ul>
+<li><strong>Agregacion multi-plataforma</strong>: Recopila datos de viajes de Prima (taximetro), FreeNow (app de movilidad) y Uber</li>
+<li><strong>Importacion de datos financieros</strong>: Extractos bancarios La Caixa (pagos TPV/VISA), gastos de combustible (Petroprix, Repsol), gastos manuales</li>
+<li><strong>Liquidacion diaria</strong>: Calculo automatizado de la liquidacion conductor-propietario con comisiones escalonadas</li>
+<li><strong>Scraping automatico</strong>: Descarga automatica de datos desde los portales de FreeNow y Prima mediante navegador headless</li>
+<li><strong>Deteccion de incidencias</strong>: Identificacion automatica de viajes sospechosos (posibles tiquets nulos)</li>
+<li><strong>Dashboard de KPIs</strong>: Metricas mensuales comparativas por conductor (ingresos, km, tasa de ocupacion, combustible)</li>
+<li><strong>Exportacion</strong>: Generacion de informes de liquidacion en Excel y PDF</li>
+<li><strong>API REST</strong>: Acceso programatico a viajes, conductores, vehiculos y resumenes</li>
+<li><strong>Gestion administrativa</strong>: Alta/baja de conductores y vehiculos, configuracion de comisiones</li>
+</ul>
+<h3 id="usuarios-del-sistema">Usuarios del sistema</h3>
+<table>
+<thead>
+<tr>
+<th>Rol</th>
+<th>Acceso</th>
+<th>Funciones</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Propietario (admin)</strong></td>
+<td>Total</td>
+<td>Dashboard, liquidacion, subir archivos, sincronizar, administrar conductores/vehiculos, validar incidencias</td>
+</tr>
+<tr>
+<td><strong>Conductor</strong></td>
+<td>Limitado</td>
+<td>Dashboard propio, consulta de viajes propios</td>
+</tr>
+</tbody>
+</table>
+<h3 id="plataformas-integradas">Plataformas integradas</h3>
+<table>
+<thead>
+<tr>
+<th>Plataforma</th>
+<th>Tipo de dato</th>
+<th>Formato</th>
+<th>Metodo de ingesta</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Prima</strong> (Taxitronic)</td>
+<td>Viajes taximetro</td>
+<td>CSV (;)</td>
+<td>Scraper automatico + carga manual</td>
+</tr>
+<tr>
+<td><strong>FreeNow</strong></td>
+<td>Viajes app</td>
+<td>CSV (,)</td>
+<td>Scraper automatico + carga manual</td>
+</tr>
+<tr>
+<td><strong>Uber</strong></td>
+<td>Resumenes diarios</td>
+<td>CSV (,)</td>
+<td>Carga manual</td>
+</tr>
+<tr>
+<td><strong>La Caixa</strong></td>
+<td>Extracto bancario TPV</td>
+<td>XLS/XLSX</td>
+<td>Carga manual</td>
+</tr>
+<tr>
+<td><strong>Petroprix</strong></td>
+<td>Gastos combustible</td>
+<td>CSV (,)</td>
+<td>Carga manual</td>
+</tr>
+<tr>
+<td><strong>Repsol/Solred</strong></td>
+<td>Gastos combustible</td>
+<td>XLSX</td>
+<td>Carga manual</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="2-arquitectura-del-sistema">2. Arquitectura del Sistema</h2>
+<h3 id="21-diagrama-de-arquitectura-general">2.1 Diagrama de arquitectura general</h3>
+<pre class="mermaid">graph TB
+    subgraph "Usuarios"
+        ADMIN["Administrador/Propietario<br>(Navegador Web)"]
+        DRIVER["Conductor<br>(Navegador Web)"]
+        API_CLIENT["Cliente API<br>(Bearer Token)"]
+    end
+
+    subgraph "TAXI2 System"
+        subgraph "Frontend"
+            TEMPLATES["Jinja2 Templates<br>+ Bootstrap 5"]
+        end
+
+        subgraph "Backend (FastAPI)"
+            MAIN["FastAPI App<br>(src/main.py)"]
+            AUTH["Auth Router<br>JWT Cookie"]
+            DASH["Dashboard"]
+            LIQ["Liquidacion"]
+            UPLOAD["Upload"]
+            SYNC["Sync"]
+            TRIPS["Trips"]
+            ADMIN_R["Admin"]
+            VALID["Validation"]
+            EXPORT["Export"]
+            API_V1["API v1"]
+        end
+
+        subgraph "Servicios"
+            CALC["Settlement Calculator"]
+            INCIDENT["Incident Detector"]
+            EXCEL_EXP["Excel Exporter"]
+            PDF_EXP["PDF Exporter"]
+            JOB_SVC["Job Service"]
+            AUTH_SVC["Auth Service"]
+            TRIP_SVC["Trip Service"]
+            GDPR_SVC["GDPR Service"]
+        end
+
+        subgraph "Parsers"
+            FN_PARSER["FreeNow Parser"]
+            PRIMA_PARSER["Prima Parser"]
+            UBER_PARSER["Uber Parser"]
+            LC_PARSER["La Caixa Parser"]
+            PETRO_PARSER["Petroprix Parser"]
+            REPSOL_PARSER["Repsol Parser"]
+        end
+
+        subgraph "Workers (Arq)"
+            WORKER["Arq Worker<br>(src/workers/tasks.py)"]
+        end
+
+        subgraph "Scrapers (Playwright)"
+            FN_SCRAPER["FreeNow Scraper"]
+            PRIMA_SCRAPER["Prima Scraper"]
+        end
+
+        REDIS[("Redis<br>Cola de trabajos")]
+        DB[("PostgreSQL<br>Base de datos")]
+    end
+
+    subgraph "Plataformas Externas"
+        FN_PORTAL["FreeNow Portal<br>portal.free-now.com"]
+        PRIMA_PORTAL["Prima Portal<br>prima.taxitronic.com"]
+    end
+
+    ADMIN --> MAIN
+    DRIVER --> MAIN
+    API_CLIENT --> API_V1
+
+    MAIN --> AUTH
+    MAIN --> DASH
+    MAIN --> LIQ
+    MAIN --> UPLOAD
+    MAIN --> SYNC
+    MAIN --> TRIPS
+    MAIN --> ADMIN_R
+    MAIN --> VALID
+    MAIN --> EXPORT
+    MAIN --> API_V1
+
+    LIQ --> CALC
+    LIQ --> EXCEL_EXP
+    LIQ --> PDF_EXP
+    VALID --> INCIDENT
+    SYNC --> JOB_SVC
+    JOB_SVC --> REDIS
+    WORKER --> REDIS
+    WORKER --> FN_SCRAPER
+    WORKER --> PRIMA_SCRAPER
+    WORKER --> DB
+
+    FN_SCRAPER --> FN_PORTAL
+    PRIMA_SCRAPER --> PRIMA_PORTAL
+
+    UPLOAD --> FN_PARSER
+    UPLOAD --> PRIMA_PARSER
+    UPLOAD --> UBER_PARSER
+    UPLOAD --> LC_PARSER
+    UPLOAD --> PETRO_PARSER
+    UPLOAD --> REPSOL_PARSER
+
+    MAIN --> DB
+    SYNC --> DB
+    UPLOAD --> DB
+    LIQ --> DB
+    DASH --> DB</pre>
+<h3 id="22-diagrama-de-contenedores-docker">2.2 Diagrama de contenedores Docker</h3>
+<pre class="mermaid">graph LR
+    subgraph "Docker Compose"
+        API["taxi-api<br>FastAPI + Uvicorn<br>Puerto 8000"]
+        WORKER["taxi-worker<br>Arq Worker<br>+ Playwright"]
+        REDIS["taxi-redis<br>Redis 7<br>Puerto 6379"]
+        DB["taxi-db<br>PostgreSQL 16<br>Puerto 5432"]
+    end
+
+    API --> DB
+    API --> REDIS
+    WORKER --> DB
+    WORKER --> REDIS
+    API -.->|"Encola trabajos"| REDIS
+    WORKER -.->|"Consume trabajos"| REDIS</pre>
+<hr />
+<h2 id="3-stack-tecnologico">3. Stack Tecnologico</h2>
+<table>
+<thead>
+<tr>
+<th>Componente</th>
+<th>Tecnologia</th>
+<th>Version</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Lenguaje</strong></td>
+<td>Python</td>
+<td>3.11+</td>
+</tr>
+<tr>
+<td><strong>Framework web</strong></td>
+<td>FastAPI</td>
+<td>0.100+</td>
+</tr>
+<tr>
+<td><strong>ORM</strong></td>
+<td>SQLAlchemy</td>
+<td>2.0</td>
+</tr>
+<tr>
+<td><strong>Migraciones</strong></td>
+<td>Alembic</td>
+<td>1.12+</td>
+</tr>
+<tr>
+<td><strong>Base de datos</strong></td>
+<td>PostgreSQL</td>
+<td>16</td>
+</tr>
+<tr>
+<td><strong>Cola de trabajos</strong></td>
+<td>Arq (Redis)</td>
+<td>0.25+</td>
+</tr>
+<tr>
+<td><strong>Cache/Broker</strong></td>
+<td>Redis</td>
+<td>7</td>
+</tr>
+<tr>
+<td><strong>Scraping</strong></td>
+<td>Playwright</td>
+<td>1.40+</td>
+</tr>
+<tr>
+<td><strong>Templates</strong></td>
+<td>Jinja2</td>
+<td>3.1+</td>
+</tr>
+<tr>
+<td><strong>CSS</strong></td>
+<td>Bootstrap</td>
+<td>5.3.3</td>
+</tr>
+<tr>
+<td><strong>Excel</strong></td>
+<td>openpyxl</td>
+<td>3.1+</td>
+</tr>
+<tr>
+<td><strong>PDF</strong></td>
+<td>fpdf2</td>
+<td>2.7+</td>
+</tr>
+<tr>
+<td><strong>Auth</strong></td>
+<td>PyJWT + bcrypt</td>
+<td>-</td>
+</tr>
+<tr>
+<td><strong>Rate Limiting</strong></td>
+<td>slowapi</td>
+<td>-</td>
+</tr>
+<tr>
+<td><strong>Contenedores</strong></td>
+<td>Docker + Docker Compose</td>
+<td>-</td>
+</tr>
+<tr>
+<td><strong>CI/CD</strong></td>
+<td>GitHub Actions</td>
+<td>-</td>
+</tr>
+<tr>
+<td><strong>Servidor</strong></td>
+<td>Uvicorn (ASGI)</td>
+<td>-</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="4-modelo-de-datos">4. Modelo de Datos</h2>
+<h3 id="41-diagrama-entidad-relacion">4.1 Diagrama Entidad-Relacion</h3>
+<pre class="mermaid">erDiagram
+    OWNER ||--o{ DRIVER : "posee"
+    OWNER ||--o{ VEHICLE : "posee"
+    DRIVER ||--o{ TRIP : "realiza"
+    VEHICLE ||--o{ TRIP : "es_usado_en"
+    DRIVER ||--o{ FUEL_EXPENSE : "gasta"
+    VEHICLE ||--o{ FUEL_EXPENSE : "consume"
+    DRIVER ||--o{ OTHER_EXPENSE : "incurre"
+    DRIVER ||--o{ FREENOW_ADJUSTMENT : "recibe"
+    VEHICLE ||--o{ TPV_DAILY_TOTAL : "registra"
+    VEHICLE ||--o{ UBER_DAILY_SUMMARY : "opera"
+    TRIP ||--o| TRIP : "linked_trip"
+    TRIP ||--o{ PENDING_VALIDATION : "requiere"
+    TRIP ||--o{ VISA_PAYMENT : "pago_visa"
+    DRIVER ||--o{ SHIFT : "trabaja"
+    VEHICLE ||--o{ SHIFT : "es_usado_en"
+    DRIVER ||--o{ PLATFORM_TOKEN : "tiene_token"
+
+    OWNER {
+        string id PK
+        string name
+        string tax_id UK
+        string email
+        string phone
+        boolean is_active
+    }
+
+    DRIVER {
+        string id PK
+        string name
+        string email UK
+        string license_number UK
+        string owner_id FK
+        string password_hash
+        boolean is_owner
+        boolean is_active
+        decimal prima_base_pct
+        decimal prima_bonus_pct
+        decimal commission_threshold
+        decimal freenow_commission_driver_pct
+        decimal uber_commission_driver_pct
+        boolean fuel_deducted_from_driver
+    }
+
+    VEHICLE {
+        string id PK
+        string plate UK
+        string license_number
+        string brand
+        string model
+        int year
+        string owner_id FK
+        boolean is_active
+    }
+
+    TRIP {
+        string id PK
+        string source
+        string external_id
+        string driver_id FK
+        string vehicle_id FK
+        string shift_id FK
+        datetime started_at
+        datetime ended_at
+        decimal distance_km
+        decimal km_free
+        decimal duration_minutes
+        decimal gross_amount
+        decimal commission
+        decimal tips
+        decimal tolls
+        string payment_method
+        string fare_type
+        string linked_trip_id FK
+    }
+
+    TPV_DAILY_TOTAL {
+        string id PK
+        date date
+        string vehicle_id FK
+        string license_number
+        decimal amount
+        string source_file
+    }
+
+    UBER_DAILY_SUMMARY {
+        string id PK
+        date date
+        string license_number
+        string vehicle_id FK
+        decimal t3_fixed
+        decimal total_payment
+        decimal total_earnings
+        decimal taximeter
+        string source_file
+    }
+
+    FUEL_EXPENSE {
+        string id PK
+        date date
+        string vehicle_id FK
+        string driver_id FK
+        decimal liters
+        decimal amount
+        string provider
+        string payment_method
+        string source_file
+    }
+
+    OTHER_EXPENSE {
+        string id PK
+        date date
+        string driver_id FK
+        decimal amount
+        string description
+        string category
+    }
+
+    FREENOW_ADJUSTMENT {
+        string id PK
+        date date
+        string driver_id FK
+        decimal amount
+        string adjustment_type
+    }
+
+    PENDING_VALIDATION {
+        string id PK
+        string trip_id FK
+        string validation_type
+        string status
+        json details
+    }
+
+    VISA_PAYMENT {
+        string id PK
+        date date
+        string vehicle_id FK
+        string trip_id FK
+        decimal amount
+        string brand
+        string source_file
+    }
+
+    SHIFT {
+        string id PK
+        string driver_id FK
+        string vehicle_id FK
+        string source
+        datetime started_at
+        datetime ended_at
+        decimal total_earnings
+    }
+
+    SYNC_LOG {
+        string id PK
+        string source
+        string status
+        int records_created
+        int records_skipped
+        datetime started_at
+        datetime completed_at
+    }
+
+    PLATFORM_TOKEN {
+        string id PK
+        string driver_id FK
+        string platform
+        string access_token_encrypted
+        datetime expires_at
+        boolean is_valid
+    }
+
+    FREENOW_IMPORT {
+        string id PK
+        string filename
+        string file_hash UK
+        string status
+        int records_imported
+    }</pre>
+<h3 id="42-descripcion-de-modelos-clave">4.2 Descripcion de modelos clave</h3>
+<h4 id="driver-conductor">Driver (Conductor)</h4>
+<p>Contiene la configuracion de comisiones que determina como se calcula la liquidacion:
+- <code>prima_base_pct</code>: Porcentaje base del conductor (ej: 40%)
+- <code>prima_bonus_pct</code>: Porcentaje bonus si supera umbral (ej: 45%)
+- <code>commission_threshold</code>: Umbral de recaudacion neta para bonus (ej: 300 EUR)
+- <code>freenow_commission_driver_pct</code>: Si &gt; 0, el conductor asume la comision de FreeNow
+- <code>fuel_deducted_from_driver</code>: Si true, la gasolina se descuenta del anticipado</p>
+<h4 id="trip-viaje">Trip (Viaje)</h4>
+<p>Registro unificado de viajes de todas las plataformas:
+- <code>source</code>: "prima", "freenow" o "uber"
+- <code>fare_type</code>: "FIXED" o "METERED" (solo FreeNow)
+- <code>payment_method</code>: "CASH", "APP", "efectivo", "tarjeta"
+- <code>linked_trip_id</code>: Enlace Prima ↔ FreeNow/Uber para evitar doble contabilidad</p>
+<h4 id="formato-de-license_number-del-conductor">Formato de <code>license_number</code> del conductor</h4>
+<p>El campo <code>license_number</code> del conductor sigue el formato: <code>"361 - 0397MSS"</code> donde:
+- <code>361</code> = Numero de licencia del taxi
+- <code>0397MSS</code> = Matricula del vehiculo asociado</p>
+<p>Este formato se usa para resolver automaticamente la relacion conductor ↔ vehiculo.</p>
+<hr />
+<h2 id="5-flujo-general-de-datos">5. Flujo General de Datos</h2>
+<pre class="mermaid">graph TD
+    subgraph "Origenes de Datos"
+        PRIMA_SRC["Prima<br>(Taximetro)"]
+        FN_SRC["FreeNow<br>(App)"]
+        UBER_SRC["Uber<br>(App)"]
+        LC_SRC["La Caixa<br>(Banco)"]
+        FUEL_SRC["Petroprix/Repsol<br>(Combustible)"]
+        MANUAL["Entrada Manual<br>(Otros gastos /<br>Ajustes FreeNow)"]
+    end
+
+    subgraph "Metodo de Ingesta"
+        SCRAPER["Scrapers<br>(Automatico)"]
+        CSV_UPLOAD["Carga CSV/XLSX<br>(Manual)"]
+        FORM["Formularios Web<br>(Manual)"]
+    end
+
+    subgraph "Parsers"
+        P_PRIMA["Prima Parser"]
+        P_FN["FreeNow Parser"]
+        P_UBER["Uber Parser"]
+        P_LC["La Caixa Parser"]
+        P_FUEL["Petroprix/Repsol Parser"]
+    end
+
+    subgraph "Almacenamiento"
+        T_TRIPS[("trips")]
+        T_TPV[("tpv_daily_totals")]
+        T_UBER[("uber_daily_summaries")]
+        T_FUEL[("fuel_expenses")]
+        T_OTHER[("other_expenses")]
+        T_FN_ADJ[("freenow_adjustments")]
+    end
+
+    subgraph "Procesamiento"
+        SETTLEMENT["Motor de Liquidacion<br>(settlement_calculator.py)"]
+        KPI["Calculo KPIs<br>(dashboard.py)"]
+        INCIDENT_D["Detector Incidencias<br>(incident_detector.py)"]
+    end
+
+    subgraph "Salida"
+        WEB["Interfaz Web"]
+        EXCEL["Excel (.xlsx)"]
+        PDF["PDF"]
+        REST["API REST"]
+    end
+
+    PRIMA_SRC --> SCRAPER
+    FN_SRC --> SCRAPER
+    PRIMA_SRC --> CSV_UPLOAD
+    FN_SRC --> CSV_UPLOAD
+    UBER_SRC --> CSV_UPLOAD
+    LC_SRC --> CSV_UPLOAD
+    FUEL_SRC --> CSV_UPLOAD
+    MANUAL --> FORM
+
+    SCRAPER --> P_PRIMA
+    SCRAPER --> P_FN
+    CSV_UPLOAD --> P_PRIMA
+    CSV_UPLOAD --> P_FN
+    CSV_UPLOAD --> P_UBER
+    CSV_UPLOAD --> P_LC
+    CSV_UPLOAD --> P_FUEL
+
+    P_PRIMA --> T_TRIPS
+    P_FN --> T_TRIPS
+    P_UBER --> T_UBER
+    P_LC --> T_TPV
+    P_FUEL --> T_FUEL
+    FORM --> T_OTHER
+    FORM --> T_FN_ADJ
+
+    T_TRIPS --> SETTLEMENT
+    T_TPV --> SETTLEMENT
+    T_UBER --> SETTLEMENT
+    T_FUEL --> SETTLEMENT
+    T_OTHER --> SETTLEMENT
+    T_FN_ADJ --> SETTLEMENT
+    T_TRIPS --> KPI
+    T_UBER --> KPI
+    T_FUEL --> KPI
+    T_TRIPS --> INCIDENT_D
+
+    SETTLEMENT --> WEB
+    SETTLEMENT --> EXCEL
+    SETTLEMENT --> PDF
+    KPI --> WEB
+    INCIDENT_D --> WEB
+    T_TRIPS --> REST</pre>
+<hr />
+<h2 id="6-ingesta-de-datos-scrapers-automaticos">6. Ingesta de Datos: Scrapers Automaticos</h2>
+<p>Los scrapers utilizan <strong>Playwright</strong> (navegador Chromium headless) para automatizar la descarga de datos desde los portales web de FreeNow y Prima.</p>
+<h3 id="61-diagrama-de-secuencia-sincronizacion-freenow">6.1 Diagrama de secuencia: Sincronizacion FreeNow</h3>
+<pre class="mermaid">sequenceDiagram
+    participant Admin as Administrador
+    participant FastAPI as FastAPI
+    participant Redis as Redis
+    participant Worker as Arq Worker
+    participant Playwright as Playwright Browser
+    participant FreeNow as portal.free-now.com
+    participant DB as PostgreSQL
+
+    Admin->>FastAPI: POST /sync/freenow<br>(start_date, end_date)
+    FastAPI->>DB: Crear SyncLog (status=running)
+    FastAPI->>Redis: Encolar job sync_freenow
+    FastAPI-->>Admin: Redirect /sync (303)
+
+    Worker->>Redis: Consumir job
+    Worker->>Playwright: Lanzar Chromium headless
+    Playwright->>FreeNow: Navegar a login
+    Playwright->>FreeNow: Introducir credenciales
+    Playwright->>FreeNow: Navegar a booking-history
+    Playwright->>FreeNow: Configurar rango de fechas
+    Playwright->>FreeNow: Click "Request bookings"
+    FreeNow-->>Playwright: Notificacion de descarga
+    Playwright->>FreeNow: Descargar ZIP
+    Playwright-->>Worker: CSV extraido
+
+    Worker->>Worker: parse_freenow_csv()
+    Worker->>DB: Crear Trip records
+    Worker->>Worker: detect_incidents()
+    Worker->>DB: Crear PendingValidation
+    Worker->>DB: Actualizar SyncLog (status=success)</pre>
+<h3 id="62-diagrama-de-secuencia-sincronizacion-prima">6.2 Diagrama de secuencia: Sincronizacion Prima</h3>
+<pre class="mermaid">sequenceDiagram
+    participant Admin as Administrador
+    participant FastAPI as FastAPI
+    participant Redis as Redis
+    participant Worker as Arq Worker
+    participant Playwright as Playwright Browser
+    participant Prima as prima.taxitronic.com
+    participant DB as PostgreSQL
+
+    Admin->>FastAPI: POST /sync/prima<br>(start_date, end_date)
+    FastAPI->>DB: Crear SyncLog (status=running)
+    FastAPI->>Redis: Encolar job sync_prima
+    FastAPI-->>Admin: Redirect /sync (303)
+
+    Worker->>Redis: Consumir job
+    Worker->>Playwright: Lanzar Chromium headless
+    Playwright->>Prima: Navegar a login
+    Playwright->>Prima: Introducir credenciales
+    Playwright->>Prima: Navegar a ConsultaTurnos
+    Playwright->>Prima: Seleccionar vehiculos y rango
+    Playwright->>Prima: Click Buscar
+    Playwright->>Prima: Exportar Servicios CSV
+    Prima-->>Playwright: Descarga CSV
+    Playwright-->>Worker: CSV descargado
+
+    Worker->>Worker: parse_prima_csv()
+    Worker->>DB: Crear Trip records
+    Worker->>Worker: detect_incidents()
+    Worker->>DB: Crear PendingValidation
+    Worker->>DB: Actualizar SyncLog (status=success)</pre>
+<h3 id="63-soporte-multi-cuenta-freenow">6.3 Soporte Multi-Cuenta FreeNow</h3>
+<p>El sistema soporta multiples cuentas de FreeNow porque las licencias de taxi estan distribuidas en diferentes cuentas:</p>
+<table>
+<thead>
+<tr>
+<th>Cuenta</th>
+<th>Etiqueta</th>
+<th>Licencias</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Cuenta 1</td>
+<td><code>account1</code></td>
+<td>092, 1061</td>
+</tr>
+<tr>
+<td>Cuenta 2</td>
+<td><code>account2</code></td>
+<td>361</td>
+</tr>
+</tbody>
+</table>
+<p>La configuracion se gestiona en <code>src/config.py</code> mediante <code>Settings.get_freenow_accounts()</code>, que devuelve la lista de cuentas con sus credenciales.</p>
+<hr />
+<h2 id="7-ingesta-de-datos-carga-manual-de-archivos">7. Ingesta de Datos: Carga Manual de Archivos</h2>
+<h3 id="71-flujo-general-de-carga-de-archivos">7.1 Flujo general de carga de archivos</h3>
+<pre class="mermaid">graph TD
+    A["Admin selecciona archivo<br>y plataforma"] --> B{Plataforma?}
+
+    B -->|"freenow / prima"| C["Guardar en temp"]
+    B -->|"lacaixa"| D["_process_lacaixa()"]
+    B -->|"uber"| E["_process_uber()"]
+    B -->|"petroprix / repsol"| F["_process_fuel()"]
+
+    C --> G["validate_csv_schema()"]
+    G -->|Valido| H["parser(tmp_path)"]
+    G -->|Invalido| ERR["Error: columnas faltantes"]
+    H --> I["_build_lookups()"]
+    I --> J["Resolver conductor/vehiculo<br>por cada registro"]
+    J --> K["Eliminar trips anteriores<br>en rango de fechas"]
+    K --> L["Crear Trip records"]
+    L --> M["detect_incidents()"]
+    M --> N["Resultado:<br>creados / reemplazados / sin asignar"]
+
+    D --> D1["parse_lacaixa_xlsx()"]
+    D1 --> D2["Eliminar TpvDailyTotal<br>en rango"]
+    D2 --> D3["Crear TpvDailyTotal records"]
+
+    E --> E1["parse_uber_csv()"]
+    E1 --> E2["Resolver conductores"]
+    E2 --> E3["Eliminar UberDailySummary<br>en rango"]
+    E3 --> E4["Crear UberDailySummary records"]
+
+    F --> F1["parse_petroprix_csv() /<br>parse_repsol_pdf()"]
+    F1 --> F2["Eliminar FuelExpense<br>en rango"]
+    F2 --> F3["Crear FuelExpense records"]</pre>
+<h3 id="72-resolucion-automatica-de-conductor-y-vehiculo">7.2 Resolucion automatica de conductor y vehiculo</h3>
+<p>El sistema resuelve automaticamente la asignacion de conductor y vehiculo a partir de los metadatos del archivo:</p>
+<pre class="mermaid">graph TD
+    REC["Registro CSV"] --> A{Tiene _driver_name?}
+
+    A -->|Si| B["Match por nombre<br>(case-insensitive, parcial)"]
+    A -->|No| C{Tiene _license?}
+
+    B --> D{Match encontrado?}
+    D -->|Si| E["driver_id resuelto"]
+    D -->|No| C
+
+    C -->|Si| F["Match por licencia<br>(092, 361, 1061)"]
+    C -->|No| G{Tiene _plate?}
+
+    F --> H["driver_id + vehicle_id"]
+
+    G -->|Si| I["Match por matricula<br>(normalizacion sin espacios)"]
+    G -->|No| J["Usar fallback<br>(seleccion manual)"]
+
+    I --> K{Match encontrado?}
+    K -->|Si| L["vehicle_id resuelto"]
+    K -->|No| J
+
+    E --> M{vehicle_id?}
+    M -->|No| N["Buscar via<br>driver_id_to_vehicle"]
+    M -->|Si| O["Completo"]
+    N --> O
+
+    L --> P{driver_id?}
+    P -->|No| Q["Buscar via<br>vehicle_id_to_driver"]
+    P -->|Si| O
+    Q --> O</pre>
+<h3 id="73-estrategia-de-reemplazo-de-datos">7.3 Estrategia de reemplazo de datos</h3>
+<p>Al subir un nuevo archivo, el sistema <strong>reemplaza</strong> los datos existentes del mismo tipo en el rango de fechas del archivo:</p>
+<table>
+<thead>
+<tr>
+<th>Tipo de dato</th>
+<th>Clave de deduplicacion</th>
+<th>Accion</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Trips (FreeNow/Prima)</td>
+<td>source + rango de fechas</td>
+<td>DELETE anteriores en rango, INSERT nuevos</td>
+</tr>
+<tr>
+<td>UberDailySummary</td>
+<td>license_number + rango de fechas</td>
+<td>DELETE anteriores, INSERT nuevos</td>
+</tr>
+<tr>
+<td>TpvDailyTotal</td>
+<td>license_number + rango de fechas</td>
+<td>DELETE anteriores, INSERT nuevos</td>
+</tr>
+<tr>
+<td>FuelExpense</td>
+<td>vehicle_id + provider + rango de fechas</td>
+<td>DELETE anteriores, INSERT nuevos</td>
+</tr>
+<tr>
+<td>FreenowAdjustment</td>
+<td>driver_id + date + adjustment_type</td>
+<td>DELETE anterior, INSERT nuevo</td>
+</tr>
+<tr>
+<td>OtherExpense</td>
+<td>Sin reemplazo</td>
+<td>Solo INSERT (acumulativo)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="74-entrada-manual-otros-gastos">7.4 Entrada manual: Otros Gastos</h3>
+<p>Formulario para registrar gastos no recurrentes del conductor:
+- <strong>Ruta</strong>: <code>POST /upload/otros-gastos</code>
+- <strong>Campos</strong>: conductor, fecha (DD/MM/YY), importe (EUR), concepto
+- <strong>Almacenamiento</strong>: Tabla <code>other_expenses</code>, categoria "otro"</p>
+<h3 id="75-entrada-manual-ajustes-freenow-otrosincentivos">7.5 Entrada manual: Ajustes FreeNow (Otros/Incentivos)</h3>
+<p>Formulario para registrar bonificaciones e incentivos de FreeNow:
+- <strong>Ruta</strong>: <code>POST /upload/freenow-ajustes</code>
+- <strong>Campos</strong>: conductor, fecha_otros + importe_otros, fecha_incentivos + importe_incentivos
+- <strong>Tipos</strong>: <code>otros</code> (cargos adicionales), <code>incentivos</code> (bonificaciones)
+- <strong>Comportamiento</strong>: Cada nuevo valor <strong>reemplaza</strong> al anterior para el mismo conductor+fecha+tipo
+- <strong>Permite valor 0</strong>: Para eliminar un ajuste previamente registrado</p>
+<hr />
+<h2 id="8-parsers-de-archivos">8. Parsers de Archivos</h2>
+<h3 id="81-freenow-parser-scriptsparsersfreenow_parserpy">8.1 FreeNow Parser (<code>scripts/parsers/freenow_parser.py</code>)</h3>
+<table>
+<thead>
+<tr>
+<th>Aspecto</th>
+<th>Detalle</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Formato</strong></td>
+<td>CSV, delimitador: coma</td>
+</tr>
+<tr>
+<td><strong>Encoding</strong></td>
+<td>UTF-8</td>
+</tr>
+<tr>
+<td><strong>Filtro</strong></td>
+<td>Solo filas con <code>BOOKING STATE = "ACCOMPLISHED"</code></td>
+</tr>
+<tr>
+<td><strong>Fechas</strong></td>
+<td>ISO 8601 con timezone (ej: <code>2026-02-01T08:30:00+01:00</code>)</td>
+</tr>
+<tr>
+<td><strong>Decimales</strong></td>
+<td>Punto como separador</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Columnas requeridas:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Columna CSV</th>
+<th>Campo Trip</th>
+<th>Descripcion</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>BOOKING ID</td>
+<td>external_id</td>
+<td>ID unico del viaje</td>
+</tr>
+<tr>
+<td>TOUR VALUE</td>
+<td>gross_amount</td>
+<td>Importe bruto del viaje</td>
+</tr>
+<tr>
+<td>TOUR TIP</td>
+<td>tips</td>
+<td>Propina</td>
+</tr>
+<tr>
+<td>TOLL VALUE</td>
+<td>tolls</td>
+<td>Peajes</td>
+</tr>
+<tr>
+<td>TAX PERCENTAGE</td>
+<td>taxes_vat</td>
+<td>Porcentaje IVA</td>
+</tr>
+<tr>
+<td>PICKUP DATE</td>
+<td>started_at</td>
+<td>Fecha/hora inicio</td>
+</tr>
+<tr>
+<td>CLOSED DATE</td>
+<td>ended_at</td>
+<td>Fecha/hora fin</td>
+</tr>
+<tr>
+<td>PAYMENT METHOD</td>
+<td>payment_method</td>
+<td>"CASH" o "APP"</td>
+</tr>
+<tr>
+<td>FARE TYPE</td>
+<td>fare_type</td>
+<td>"FIXED" o "METERED"</td>
+</tr>
+<tr>
+<td>DRIVER FIRST NAME + LAST NAME</td>
+<td>_driver_name</td>
+<td>Para resolucion automatica</td>
+</tr>
+<tr>
+<td>LICENCE PLATE</td>
+<td>_plate</td>
+<td>Para resolucion automatica</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Distincion FIXED vs METERED:</strong>
+- <strong>FIXED</strong>: FreeNow cobra tarifa fija. Se incluye en recaudacion como ingreso adicional al taximetro.
+- <strong>METERED</strong>: FreeNow usa el taximetro. El importe ya esta registrado en Prima. No se suma a recaudacion para evitar duplicidad.</p>
+<h3 id="82-prima-parser-scriptsparsersprima_parserpy">8.2 Prima Parser (<code>scripts/parsers/prima_parser.py</code>)</h3>
+<table>
+<thead>
+<tr>
+<th>Aspecto</th>
+<th>Detalle</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Formato</strong></td>
+<td>CSV, delimitador: punto y coma (;)</td>
+</tr>
+<tr>
+<td><strong>Encoding</strong></td>
+<td>UTF-8</td>
+</tr>
+<tr>
+<td><strong>Fechas</strong></td>
+<td><code>DD/MM/YYYY H:MM:SS</code> o <code>DD/MM/YY H:MM</code> (naive, sin timezone)</td>
+</tr>
+<tr>
+<td><strong>Decimales</strong></td>
+<td>Coma como separador (formato europeo)</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Columnas requeridas:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Columna CSV</th>
+<th>Campo Trip</th>
+<th>Descripcion</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>TripNumber</td>
+<td>external_id</td>
+<td>Numero de viaje</td>
+</tr>
+<tr>
+<td>DateTripStart</td>
+<td>started_at</td>
+<td>Fecha/hora inicio (naive)</td>
+</tr>
+<tr>
+<td>DateTripEnd</td>
+<td>ended_at</td>
+<td>Fecha/hora fin</td>
+</tr>
+<tr>
+<td>AmountTotalPaid</td>
+<td>gross_amount</td>
+<td>Importe total</td>
+</tr>
+<tr>
+<td>AmountTips</td>
+<td>tips</td>
+<td>Propinas</td>
+</tr>
+<tr>
+<td>AmountTolls</td>
+<td>tolls</td>
+<td>Peajes</td>
+</tr>
+<tr>
+<td>PaymentMode</td>
+<td>payment_method</td>
+<td>Modo de pago</td>
+</tr>
+<tr>
+<td>km</td>
+<td>distance_km</td>
+<td>Km ocupados</td>
+</tr>
+<tr>
+<td>km_free</td>
+<td>km_free</td>
+<td>Km en vacio</td>
+</tr>
+<tr>
+<td>DriverName</td>
+<td>_driver_name</td>
+<td>Mapa conductor (1→NOMBRE)</td>
+</tr>
+<tr>
+<td>License</td>
+<td>_license</td>
+<td>Numero licencia</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Mapa de conductores Prima:</strong>
+El CSV de Prima usa codigos numericos para conductores (ej: "1", "2"). El parser mantiene un mapa interno que traduce estos codigos a nombres completos.</p>
+<h3 id="83-uber-parser-scriptsparsersuber_parserpy">8.3 Uber Parser (<code>scripts/parsers/uber_parser.py</code>)</h3>
+<table>
+<thead>
+<tr>
+<th>Aspecto</th>
+<th>Detalle</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Formato</strong></td>
+<td>CSV, delimitador: coma</td>
+</tr>
+<tr>
+<td><strong>Encoding</strong></td>
+<td>UTF-8-sig (con BOM)</td>
+</tr>
+<tr>
+<td><strong>Fechas</strong></td>
+<td>Formato fecha en columna</td>
+</tr>
+<tr>
+<td><strong>Salida</strong></td>
+<td>Lista de resumenes diarios (no viajes individuales)</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Campos de salida:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Campo</th>
+<th>Descripcion</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>date</td>
+<td>Fecha del resumen</td>
+</tr>
+<tr>
+<td>_driver_name</td>
+<td>Nombre del conductor</td>
+</tr>
+<tr>
+<td>t3_fixed</td>
+<td>Ganancias - Taximetro (importe que suma a recaudacion)</td>
+</tr>
+<tr>
+<td>total_payment</td>
+<td>Pago total de Uber al conductor</td>
+</tr>
+<tr>
+<td>total_earnings</td>
+<td>Ganancias totales</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Nota</strong>: Uber no genera registros <code>Trip</code> individuales. Genera registros <code>UberDailySummary</code> con totales diarios por licencia.</p>
+<h3 id="84-la-caixa-parser-scriptsparserslacaixa_parserpy">8.4 La Caixa Parser (<code>scripts/parsers/lacaixa_parser.py</code>)</h3>
+<table>
+<thead>
+<tr>
+<th>Aspecto</th>
+<th>Detalle</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Formato</strong></td>
+<td>XLS o XLSX (extracto bancario)</td>
+</tr>
+<tr>
+<td><strong>Deteccion</strong></td>
+<td>Celda (1,1) contiene "Moviments del compte"</td>
+</tr>
+<tr>
+<td><strong>Filtro</strong></td>
+<td>Movimientos que empiezan por ON34, ON35 o ON36</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Mapeo de terminales a licencias:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Prefijo terminal</th>
+<th>Licencia</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>ON34 (34)</td>
+<td>092</td>
+</tr>
+<tr>
+<td>ON35 (35)</td>
+<td>1061</td>
+</tr>
+<tr>
+<td>ON36 (36)</td>
+<td>361</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Salida:</strong> Lista de <code>{date, license_number, amount}</code> agregados por dia y licencia.</p>
+<h3 id="85-petroprix-parser-scriptsparserspetroprix_parserpy">8.5 Petroprix Parser (<code>scripts/parsers/petroprix_parser.py</code>)</h3>
+<table>
+<thead>
+<tr>
+<th>Aspecto</th>
+<th>Detalle</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Formato</strong></td>
+<td>CSV, delimitador: coma</td>
+</tr>
+<tr>
+<td><strong>Decimales</strong></td>
+<td>Europeo (coma en posicion de columnas)</td>
+</tr>
+<tr>
+<td><strong>Fecha</strong></td>
+<td><code>DD-MM-YYYY HH:MM:SS</code></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Salida:</strong> <code>FuelExpense</code> con date, _plate, liters, amount, provider="petroprix", payment_method</p>
+<h3 id="86-repsolsolred-parser-scriptsparsersrepsol_parserpy">8.6 Repsol/Solred Parser (<code>scripts/parsers/repsol_parser.py</code>)</h3>
+<table>
+<thead>
+<tr>
+<th>Aspecto</th>
+<th>Detalle</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Formato</strong></td>
+<td>XLSX</td>
+</tr>
+<tr>
+<td><strong>Litros</strong></td>
+<td>Formato "39,120 l" o "43.81"</td>
+</tr>
+<tr>
+<td><strong>Importe</strong></td>
+<td>Numerico o con coma</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Salida:</strong> <code>FuelExpense</code> con date, _plate, liters, amount, provider="repsol", payment_method</p>
+<hr />
+<h2 id="9-calculo-de-liquidacion-settlement">9. Calculo de Liquidacion (Settlement)</h2>
+<p>El sistema de liquidacion es el nucleo financiero de la aplicacion. Calcula diariamente cuanto debe cobrar o pagar cada conductor al propietario.</p>
+<h3 id="91-diagrama-del-flujo-de-calculo">9.1 Diagrama del flujo de calculo</h3>
+<pre class="mermaid">graph TD
+    subgraph "Datos de Entrada (por dia)"
+        IN1["prima_amount<br>Taximetro"]
+        IN2["freenow_fixed_bruto<br>FreeNow FIXED bruto"]
+        IN3["freenow_fixed_tips<br>Propinas FreeNow"]
+        IN4["uber_t3_fixed<br>Uber T3"]
+        IN5["incidents_amount<br>Incidencias"]
+        IN6["tpv_visa_total<br>Pagos TPV/VISA"]
+        IN7["freenow_app_paid_bruto<br>FreeNow APP bruto"]
+        IN8["freenow_app_tips<br>Propinas APP"]
+        IN9["freenow_cash_bruto<br>FreeNow CASH bruto"]
+        IN10["uber_total_payment<br>Pago Uber"]
+        IN11["fuel_total<br>Gasolina"]
+        IN12["other_expenses_total<br>Otros gastos"]
+        IN13["freenow_adjustments<br>Ajustes FreeNow"]
+    end
+
+    subgraph "Paso 1: FreeNow Fixed (neto o bruto)"
+        S1{"freenow_commission<br>_driver_pct > 0?"}
+        S1 -->|"Si (conductor asume)"| S1A["freenow_fixed =<br>net(bruto) + tips"]
+        S1 -->|"No (propietario asume)"| S1B["freenow_fixed =<br>bruto + tips"]
+    end
+
+    subgraph "Paso 2: Recaudacion"
+        S2["recaudacion_total =<br>prima + freenow_fixed +<br>uber_t3 + adjustments"]
+    end
+
+    subgraph "Paso 3: Recaudacion Neta"
+        S3["recaudacion_neta =<br>recaudacion_total - incidencias"]
+    end
+
+    subgraph "Paso 4: IVA"
+        S4["iva = recaudacion_neta -<br>(recaudacion_neta / 1.1)"]
+    end
+
+    subgraph "Paso 5: Base Imponible"
+        S5["base_imponible =<br>recaudacion_neta - iva"]
+    end
+
+    subgraph "Paso 6: Porcentaje Conductor"
+        S6{"recaudacion_neta<br>>= threshold?"}
+        S6 -->|Si| S6A["driver_pct = bonus_pct"]
+        S6 -->|No| S6B["driver_pct = base_pct"]
+    end
+
+    subgraph "Paso 7: Parte Proporcional"
+        S7["parte_proporcional =<br>base_imponible * driver_pct / 100"]
+    end
+
+    subgraph "Paso 8: FreeNow APP"
+        S8{"freenow_commission<br>_driver_pct > 0?"}
+        S8 -->|"No"| S8A["freenow_app =<br>app_bruto + app_tips +<br>adjustments"]
+        S8 -->|"Si"| S8B["cash_commission =<br>cash_bruto * 12.5% * 1.21<br><br>freenow_app =<br>net(app_bruto) + app_tips +<br>adjustments - cash_commission"]
+    end
+
+    subgraph "Paso 9: Anticipado"
+        S9["anticipado = recaudacion_neta<br>- tpv_visa - freenow_app<br>- uber_payment<br>- otros_gastos<br>- gasolina (si deducida)"]
+    end
+
+    subgraph "Paso 10: Cash"
+        S10["cash = recaudacion_neta<br>- tpv_visa - freenow_app<br>- uber_payment"]
+    end
+
+    subgraph "Paso 11: Liquidacion"
+        S11["liquidacion =<br>parte_proporcional - anticipado"]
+    end
+
+    IN1 --> S2
+    IN2 --> S1
+    IN3 --> S1
+    S1A --> S2
+    S1B --> S2
+    IN4 --> S2
+    IN13 --> S2
+    S2 --> S3
+    IN5 --> S3
+    S3 --> S4
+    S4 --> S5
+    S3 --> S6
+    S5 --> S7
+    S6A --> S7
+    S6B --> S7
+
+    IN7 --> S8
+    IN8 --> S8
+    IN9 --> S8B
+    IN13 --> S8
+
+    S3 --> S9
+    IN6 --> S9
+    S8A --> S9
+    S8B --> S9
+    IN10 --> S9
+    IN11 --> S9
+    IN12 --> S9
+
+    S3 --> S10
+    IN6 --> S10
+    S8A --> S10
+    S8B --> S10
+    IN10 --> S10
+
+    S7 --> S11
+    S9 --> S11</pre>
+<h3 id="92-formula-paso-a-paso">9.2 Formula paso a paso</h3>
+<h4 id="paso-1-freenow-fixed-neto-o-bruto">Paso 1: FreeNow Fixed (neto o bruto)</h4>
+<p>Determina como entra FreeNow FIXED en la recaudacion dependiendo de quien asume la comision:</p>
+<p><strong>Si el conductor asume la comision</strong> (<code>freenow_commission_driver_pct &gt; 0</code>):</p>
+<pre><code>freenow_fixed = calculate_freenow_net(bruto) + tips
+</code></pre>
+<p><strong>Si el propietario asume la comision</strong> (<code>freenow_commission_driver_pct == 0</code>):</p>
+<pre><code>freenow_fixed = bruto + tips
+</code></pre>
+<p>Donde <code>calculate_freenow_net(bruto)</code> calcula:</p>
+<pre><code>comision = bruto * 12.5%
+comision_con_iva = comision * 1.21
+neto = bruto - comision_con_iva
+
+Ejemplo: bruto = 100 EUR
+  comision = 100 * 0.125 = 12.50
+  comision_con_iva = 12.50 * 1.21 = 15.13
+  neto = 100 - 15.13 = 84.88 EUR
+</code></pre>
+<p>Los ajustes de FreeNow (otros/incentivos) se suman despues:</p>
+<pre><code>freenow_fixed = freenow_fixed + freenow_adjustments
+</code></pre>
+<h4 id="paso-2-recaudacion-total">Paso 2: Recaudacion Total</h4>
+<p>Suma todos los ingresos del dia:</p>
+<pre><code>recaudacion_total = prima_amount + freenow_fixed + uber_t3_fixed
+</code></pre>
+<h4 id="paso-3-recaudacion-neta">Paso 3: Recaudacion Neta</h4>
+<p>Resta las incidencias (tiquets nulos confirmados):</p>
+<pre><code>recaudacion_neta = recaudacion_total - incidents_amount
+</code></pre>
+<h4 id="paso-4-iva-10">Paso 4: IVA (10%)</h4>
+<p>Extrae el IVA incluido en la recaudacion neta:</p>
+<pre><code>iva = recaudacion_neta - (recaudacion_neta / 1.1)
+
+Ejemplo: recaudacion_neta = 200 EUR
+  iva = 200 - (200 / 1.1) = 200 - 181.82 = 18.18 EUR
+</code></pre>
+<h4 id="paso-5-base-imponible">Paso 5: Base Imponible</h4>
+<p>Recaudacion sin IVA:</p>
+<pre><code>base_imponible = recaudacion_neta - iva
+
+Ejemplo: 200 - 18.18 = 181.82 EUR
+</code></pre>
+<h4 id="paso-6-porcentaje-del-conductor">Paso 6: Porcentaje del Conductor</h4>
+<p>Sistema de comision escalonada:</p>
+<pre><code>Si recaudacion_neta &gt;= commission_threshold:
+    driver_pct = prima_bonus_pct  (ej: 45%)
+Sino:
+    driver_pct = prima_base_pct   (ej: 40%)
+
+Si threshold == 0: siempre usa base_pct
+</code></pre>
+<h4 id="paso-7-parte-proporcional">Paso 7: Parte Proporcional</h4>
+<p>Lo que le corresponde al conductor de la recaudacion:</p>
+<pre><code>parte_proporcional = base_imponible * driver_pct / 100
+
+Ejemplo: 181.82 * 40 / 100 = 72.73 EUR
+</code></pre>
+<h4 id="paso-8-freenow-app-pagos-por-transferencia">Paso 8: FreeNow APP (pagos por transferencia)</h4>
+<p>Calcula lo que FreeNow ha pagado por transferencia:</p>
+<p><strong>Si el propietario asume la comision</strong> (<code>freenow_commission_driver_pct == 0</code>):</p>
+<pre><code>freenow_app = freenow_app_paid_bruto + freenow_app_tips + freenow_adjustments
+</code></pre>
+<p><strong>Si el conductor asume la comision</strong> (<code>freenow_commission_driver_pct &gt; 0</code>):</p>
+<pre><code>freenow_cash_commission = freenow_cash_bruto * 12.5% * 1.21
+
+freenow_app = calculate_freenow_net(freenow_app_paid_bruto)
+            + freenow_app_tips
+            + freenow_adjustments
+            - freenow_cash_commission
+</code></pre>
+<p><strong>Explicacion de la comision CASH</strong>: FreeNow cobra su comision (12.5% + 21% IVA) sobre TODOS los viajes, incluidos los pagados en efectivo. Para los viajes CASH, FreeNow descuenta esta comision del pago por transferencia. Por eso se resta del <code>freenow_app</code>.</p>
+<p><strong>Nota sobre fare_type</strong>: <code>freenow_app_paid_bruto</code> incluye TODOS los viajes pagados por APP, tanto FIXED como METERED. No se filtra por <code>fare_type</code>.</p>
+<h4 id="paso-9-anticipado">Paso 9: Anticipado</h4>
+<p>Dinero que el conductor ya ha adelantado al propietario (lo que ha ingresado pero no es suyo):</p>
+<pre><code>anticipado = recaudacion_neta
+           - tpv_visa_total       (cobrado por tarjeta/VISA)
+           - freenow_app          (pagado por transferencia FreeNow)
+           - uber_total_payment   (pagado por transferencia Uber)
+           - other_expenses_total (gastos deducidos)
+           - fuel_deduction       (gasolina, si fuel_deducted_from_driver)
+</code></pre>
+<h4 id="paso-10-cash">Paso 10: Cash</h4>
+<p>Efectivo que tiene el conductor en mano:</p>
+<pre><code>cash = recaudacion_neta - tpv_visa_total - freenow_app - uber_total_payment
+</code></pre>
+<h4 id="paso-11-liquidacion-final">Paso 11: Liquidacion Final</h4>
+<p>Diferencia entre lo que le corresponde al conductor y lo que ya ha adelantado:</p>
+<pre><code>liquidacion = parte_proporcional - anticipado
+</code></pre>
+<table>
+<thead>
+<tr>
+<th>Resultado</th>
+<th>Significado</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>liquidacion &gt; 0</code></td>
+<td>El conductor ha adelantado mas de lo que le corresponde. El propietario le debe dinero.</td>
+</tr>
+<tr>
+<td><code>liquidacion &lt; 0</code></td>
+<td>El conductor debe dinero al propietario (normalmente del efectivo recaudado).</td>
+</tr>
+<tr>
+<td><code>liquidacion == 0</code></td>
+<td>Estan en paz.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="93-recopilacion-de-datos-diarios">9.3 Recopilacion de datos diarios</h3>
+<p>La funcion <code>_get_daily_data()</code> en <code>liquidacion.py</code> recopila todos los datos necesarios para un dia:</p>
+<pre class="mermaid">graph TD
+    subgraph "Queries por dia"
+        Q1["Prima trips<br>source=prima<br>driver_id/vehicle_id<br>Datetime naive"]
+        Q2["FreeNow trips<br>source=freenow<br>driver_id/vehicle_id<br>Datetime tz-aware"]
+        Q3["Incidencias<br>distance_km==0 AND<br>duration<0.5min<br>Excluye invalidadas"]
+        Q4["UberDailySummary<br>por license_number<br>o vehicle_id"]
+        Q5["TpvDailyTotal<br>por license_number<br>o vehicle_id"]
+        Q6["FuelExpense<br>por vehicle_id"]
+        Q7["OtherExpense<br>por driver_id"]
+        Q8["FreenowAdjustment<br>por driver_id"]
+    end
+
+    Q1 --> AGG["Agregacion"]
+    Q2 --> AGG
+    Q3 --> AGG
+    Q4 --> AGG
+    Q5 --> AGG
+    Q6 --> AGG
+    Q7 --> AGG
+    Q8 --> AGG
+
+    AGG --> OUT["Dict con 13 campos:<br>prima_amount, freenow_fixed_bruto,<br>freenow_fixed_tips, uber_t3_fixed,<br>incidents_amount, tpv_visa_total,<br>freenow_app_paid_bruto, freenow_app_tips,<br>freenow_cash_bruto, uber_total_payment,<br>fuel_total, other_expenses_total,<br>freenow_adjustments"]</pre>
+<h3 id="94-manejo-de-zonas-horarias">9.4 Manejo de zonas horarias</h3>
+<table>
+<thead>
+<tr>
+<th>Plataforma</th>
+<th>Tipo de datetime</th>
+<th>Zona horaria</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Prima</strong></td>
+<td>Naive (sin timezone)</td>
+<td>Se asume hora local</td>
+</tr>
+<tr>
+<td><strong>FreeNow</strong></td>
+<td>Aware (con timezone)</td>
+<td>Europe/Madrid</td>
+</tr>
+<tr>
+<td><strong>Ventana diaria</strong></td>
+<td>Prima: <code>datetime.combine(date, time.min)</code></td>
+<td>FreeNow: <code>datetime.combine(date, time.min, tzinfo=Europe/Madrid)</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="95-ejemplo-numerico-completo">9.5 Ejemplo numerico completo</h3>
+<p><strong>Datos del dia:</strong>
+| Campo | Valor |
+|-------|-------|
+| prima_amount | 127.35 EUR |
+| freenow_fixed_bruto | 70.20 EUR |
+| freenow_fixed_tips | 5.00 EUR |
+| uber_t3_fixed | 25.00 EUR |
+| incidents_amount | 0.00 EUR |
+| tpv_visa_total | 80.00 EUR |
+| freenow_app_paid_bruto | 50.00 EUR |
+| freenow_app_tips | 3.00 EUR |
+| uber_total_payment | 60.00 EUR |
+| fuel_total | 30.00 EUR |
+| other_expenses_total | 0.00 EUR |
+| freenow_adjustments | 10.00 EUR |</p>
+<p><strong>Configuracion conductor:</strong> base_pct=40%, bonus_pct=45%, threshold=300, freenow_commission_driver_pct=0, fuel_deducted=true</p>
+<p><strong>Calculo:</strong></p>
+<ol>
+<li><code>freenow_fixed = 70.20 + 5.00 + 10.00 = 85.20</code> (propietario asume comision)</li>
+<li><code>recaudacion_total = 127.35 + 85.20 + 25.00 = 237.55</code></li>
+<li><code>recaudacion_neta = 237.55 - 0.00 = 237.55</code></li>
+<li><code>iva = 237.55 - (237.55 / 1.1) = 237.55 - 215.95 = 21.59</code></li>
+<li><code>base_imponible = 237.55 - 21.59 = 215.95</code></li>
+<li><code>driver_pct = 40%</code> (237.55 &lt; 300 threshold)</li>
+<li><code>parte_proporcional = 215.95 * 40 / 100 = 86.38</code></li>
+<li><code>freenow_app = 50.00 + 3.00 + 10.00 = 63.00</code> (propietario asume comision)</li>
+<li><code>anticipado = 237.55 - 80.00 - 63.00 - 60.00 - 0.00 - 30.00 = 4.55</code></li>
+<li><code>cash = 237.55 - 80.00 - 63.00 - 60.00 = 34.55</code></li>
+<li><code>liquidacion = 86.38 - 4.55 = 81.83</code> (propietario debe al conductor)</li>
+</ol>
+<hr />
+<h2 id="10-dashboard-de-kpis">10. Dashboard de KPIs</h2>
+<p>El dashboard (<code>src/routes/dashboard.py</code>) muestra metricas mensuales comparativas para todos los conductores activos.</p>
+<h3 id="101-kpis-calculados">10.1 KPIs calculados</h3>
+<p><pre class="mermaid">graph LR
+    subgraph "Docker Compose"
+        API["taxi-api<br>FastAPI + Uvicorn<br>Puerto 8000"]
+        WORKER["taxi-worker<br>Arq Worker<br>+ Playwright"]
+        REDIS["taxi-redis<br>Redis 7<br>Puerto 6379"]
+        DB["taxi-db<br>PostgreSQL 16<br>Puerto 5432"]
+    end
+
+    API --> DB
+    API --> REDIS
+    WORKER --> DB
+    WORKER --> REDIS
+    API -.->|"Encola trabajos"| REDIS
+    WORKER -.->|"Consume trabajos"| REDIS</pre>0</p>
+<h3 id="102-formulas-de-kpis">10.2 Formulas de KPIs</h3>
+<table>
+<thead>
+<tr>
+<th>KPI</th>
+<th>Formula</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>total_rec</td>
+<td>prima + freenow_bruto + freenow_tips + uber_t3</td>
+</tr>
+<tr>
+<td>total_rec_neta</td>
+<td>prima + freenow_net + freenow_tips + uber_t3</td>
+</tr>
+<tr>
+<td>dias</td>
+<td>Dias unicos trabajados (union Prima + FreeNow + Uber)</td>
+</tr>
+<tr>
+<td>viajes</td>
+<td>prima_trips + freenow_trips (Uber no cuenta individualmente)</td>
+</tr>
+<tr>
+<td>eur_per_km</td>
+<td>total_rec_neta / total_km</td>
+</tr>
+<tr>
+<td>eur_per_viaje</td>
+<td>total_rec_neta / viajes</td>
+</tr>
+<tr>
+<td>promedio_diario</td>
+<td>total_rec_neta / dias</td>
+</tr>
+<tr>
+<td>tasa_ocupacion</td>
+<td>km_occupied / total_km * 100</td>
+</tr>
+<tr>
+<td>fuel_pct</td>
+<td>fuel_cost / total_rec_neta * 100</td>
+</tr>
+<tr>
+<td>fuel_cost_per_km</td>
+<td>fuel_cost / total_km</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="11-deteccion-de-incidencias">11. Deteccion de Incidencias</h2>
+<h3 id="111-criterios-de-deteccion">11.1 Criterios de deteccion</h3>
+<p>Un viaje se marca como posible incidencia si cumple AMBAS condiciones:
+- <code>distance_km == 0</code> (sin desplazamiento)
+- <code>duration_minutes &lt; 0.5</code> (menos de 30 segundos)</p>
+<p>Esto indica un posible tiquet nulo: el taximetro se abrio y cerro sin realizar un viaje real.</p>
+<h3 id="112-flujo-de-validacion-de-incidencias">11.2 Flujo de validacion de incidencias</h3>
+<p><pre class="mermaid">graph LR
+    subgraph "Docker Compose"
+        API["taxi-api<br>FastAPI + Uvicorn<br>Puerto 8000"]
+        WORKER["taxi-worker<br>Arq Worker<br>+ Playwright"]
+        REDIS["taxi-redis<br>Redis 7<br>Puerto 6379"]
+        DB["taxi-db<br>PostgreSQL 16<br>Puerto 5432"]
+    end
+
+    API --> DB
+    API --> REDIS
+    WORKER --> DB
+    WORKER --> REDIS
+    API -.->|"Encola trabajos"| REDIS
+    WORKER -.->|"Consume trabajos"| REDIS</pre>1</p>
+<h3 id="113-impacto-en-la-liquidacion">11.3 Impacto en la liquidacion</h3>
+<p>Los viajes marcados como <strong>validos</strong> (incidencias confirmadas) se suman a <code>incidents_amount</code> y se restan de <code>recaudacion_total</code> para obtener <code>recaudacion_neta</code>. Los marcados como <strong>invalidos</strong> se excluyen del calculo.</p>
+<hr />
+<h2 id="12-exportacion-de-datos">12. Exportacion de Datos</h2>
+<h3 id="121-columnas-del-informe-de-liquidacion">12.1 Columnas del informe de liquidacion</h3>
+<p>Los informes Excel y PDF contienen 17 columnas identicas:</p>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Columna</th>
+<th>Campo interno</th>
+<th>Descripcion</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>Fecha</td>
+<td>date</td>
+<td>Dia del calculo</td>
+</tr>
+<tr>
+<td>2</td>
+<td>Prima</td>
+<td>prima_amount</td>
+<td>Ingresos taximetro</td>
+</tr>
+<tr>
+<td>3</td>
+<td>Inc</td>
+<td>incidents_amount</td>
+<td>Incidencias descontadas</td>
+</tr>
+<tr>
+<td>4</td>
+<td>FreenowT3</td>
+<td>freenow_fixed</td>
+<td>FreeNow FIXED neto/bruto + ajustes</td>
+</tr>
+<tr>
+<td>5</td>
+<td>Uber T3</td>
+<td>uber_t3_fixed</td>
+<td>Uber T3 fijo</td>
+</tr>
+<tr>
+<td>6</td>
+<td>Rec. Neta</td>
+<td>recaudacion_neta</td>
+<td>Recaudacion neta</td>
+</tr>
+<tr>
+<td>7</td>
+<td>%</td>
+<td>driver_pct</td>
+<td>Porcentaje conductor</td>
+</tr>
+<tr>
+<td>8</td>
+<td>TPV</td>
+<td>tpv_visa_total</td>
+<td>Total pagos VISA/tarjeta</td>
+</tr>
+<tr>
+<td>9</td>
+<td>App FN</td>
+<td>freenow_app</td>
+<td>Pagos FreeNow por app</td>
+</tr>
+<tr>
+<td>10</td>
+<td>App Uber</td>
+<td>uber_total_payment</td>
+<td>Pagos Uber</td>
+</tr>
+<tr>
+<td>11</td>
+<td>Cash</td>
+<td>cash</td>
+<td>Efectivo en mano</td>
+</tr>
+<tr>
+<td>12</td>
+<td>IVA</td>
+<td>iva</td>
+<td>IVA 10%</td>
+</tr>
+<tr>
+<td>13</td>
+<td>Parte Prop.</td>
+<td>parte_proporcional</td>
+<td>Parte proporcional conductor</td>
+</tr>
+<tr>
+<td>14</td>
+<td>Gasolina</td>
+<td>fuel_total</td>
+<td>Gastos combustible</td>
+</tr>
+<tr>
+<td>15</td>
+<td>Otros</td>
+<td>other_expenses_total</td>
+<td>Otros gastos</td>
+</tr>
+<tr>
+<td>16</td>
+<td>Anticipado</td>
+<td>anticipado</td>
+<td>Dinero adelantado</td>
+</tr>
+<tr>
+<td>17</td>
+<td>Liquidacion</td>
+<td>liquidacion</td>
+<td>Resultado final</td>
+</tr>
+</tbody>
+</table>
+<h3 id="122-excel-openpyxl">12.2 Excel (openpyxl)</h3>
+<ul>
+<li><strong>Formato</strong>: XLSX con estilos (cabeceras azules, totales resaltados)</li>
+<li><strong>Nombre archivo</strong>: <code>liquidacion_{conductor}_{fecha_inicio}_{fecha_fin}.xlsx</code></li>
+<li><strong>Formato numeros</strong>: <code>#,##0.00</code></li>
+<li><strong>Fila totales</strong>: Suma de todas las columnas con fondo azul claro</li>
+</ul>
+<h3 id="123-pdf-fpdf2">12.3 PDF (fpdf2)</h3>
+<ul>
+<li><strong>Orientacion</strong>: Apaisado (landscape) A4</li>
+<li><strong>Fuente</strong>: Helvetica 6pt</li>
+<li><strong>Filas alternadas</strong>: Gris claro / blanco</li>
+<li><strong>Cabecera</strong>: Fondo azul (68, 114, 196), texto blanco</li>
+<li><strong>Nombre archivo</strong>: <code>liquidacion_{conductor}_{fecha_inicio}_{fecha_fin}.pdf</code></li>
+</ul>
+<hr />
+<h2 id="13-autenticacion-y-seguridad">13. Autenticacion y Seguridad</h2>
+<h3 id="131-flujo-de-autenticacion">13.1 Flujo de autenticacion</h3>
+<p><pre class="mermaid">graph LR
+    subgraph "Docker Compose"
+        API["taxi-api<br>FastAPI + Uvicorn<br>Puerto 8000"]
+        WORKER["taxi-worker<br>Arq Worker<br>+ Playwright"]
+        REDIS["taxi-redis<br>Redis 7<br>Puerto 6379"]
+        DB["taxi-db<br>PostgreSQL 16<br>Puerto 5432"]
+    end
+
+    API --> DB
+    API --> REDIS
+    WORKER --> DB
+    WORKER --> REDIS
+    API -.->|"Encola trabajos"| REDIS
+    WORKER -.->|"Consume trabajos"| REDIS</pre>2</p>
+<h3 id="132-configuracion-de-seguridad">13.2 Configuracion de seguridad</h3>
+<table>
+<thead>
+<tr>
+<th>Medida</th>
+<th>Implementacion</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Cookies</strong></td>
+<td>httponly=True, secure=True (produccion), samesite=lax</td>
+</tr>
+<tr>
+<td><strong>JWT</strong></td>
+<td>HS256, expiracion 24 horas</td>
+</tr>
+<tr>
+<td><strong>Rate limiting</strong></td>
+<td>5 intentos login / 5 min por IP; 60 requests/min general</td>
+</tr>
+<tr>
+<td><strong>CSRF</strong></td>
+<td>Middleware que verifica Origin/Referer en POST/PUT/DELETE</td>
+</tr>
+<tr>
+<td><strong>XSS</strong></td>
+<td>Jinja2 auto-escaping en templates</td>
+</tr>
+<tr>
+<td><strong>Path traversal</strong></td>
+<td>Validacion de filenames en visualizacion de archivos</td>
+</tr>
+<tr>
+<td><strong>Passwords</strong></td>
+<td>bcrypt hashing</td>
+</tr>
+</tbody>
+</table>
+<h3 id="133-roles-y-permisos">13.3 Roles y permisos</h3>
+<table>
+<thead>
+<tr>
+<th>Ruta</th>
+<th>Admin/Owner</th>
+<th>Conductor</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>/</code> (Dashboard)</td>
+<td>Todos los conductores</td>
+<td>Solo sus datos</td>
+</tr>
+<tr>
+<td><code>/liquidacion</code></td>
+<td>Acceso completo</td>
+<td>Sin acceso</td>
+</tr>
+<tr>
+<td><code>/upload</code></td>
+<td>Acceso completo</td>
+<td>Sin acceso</td>
+</tr>
+<tr>
+<td><code>/sync</code></td>
+<td>Acceso completo</td>
+<td>Sin acceso</td>
+</tr>
+<tr>
+<td><code>/admin</code></td>
+<td>Acceso completo</td>
+<td>Sin acceso</td>
+</tr>
+<tr>
+<td><code>/validacion</code></td>
+<td>Acceso completo</td>
+<td>Sin acceso</td>
+</tr>
+<tr>
+<td><code>/trips</code></td>
+<td>Todos los viajes</td>
+<td>Solo sus viajes</td>
+</tr>
+<tr>
+<td><code>/export</code></td>
+<td>Acceso completo</td>
+<td>Solo sus datos</td>
+</tr>
+<tr>
+<td><code>/api/v1/*</code></td>
+<td>Acceso completo</td>
+<td>Solo sus datos</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="14-api-rest-v1">14. API REST v1</h2>
+<h3 id="141-autenticacion-api">14.1 Autenticacion API</h3>
+<pre><code>POST /api/v1/auth/login?email=...&amp;password=...
+→ {&quot;access_token&quot;: &quot;eyJ...&quot;, &quot;token_type&quot;: &quot;bearer&quot;}
+
+Headers: Authorization: Bearer &lt;token&gt;
+</code></pre>
+<h3 id="142-endpoints-disponibles">14.2 Endpoints disponibles</h3>
+<table>
+<thead>
+<tr>
+<th>Metodo</th>
+<th>Ruta</th>
+<th>Descripcion</th>
+<th>Auth</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>POST</td>
+<td><code>/api/v1/auth/login</code></td>
+<td>Obtener token Bearer</td>
+<td>Publico</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/v1/trips</code></td>
+<td>Listar viajes (paginado)</td>
+<td>Bearer</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/v1/trips/{id}</code></td>
+<td>Detalle de viaje</td>
+<td>Bearer</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/v1/drivers</code></td>
+<td>Listar conductores</td>
+<td>Admin</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/v1/drivers/{id}</code></td>
+<td>Detalle conductor</td>
+<td>Bearer</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/v1/vehicles</code></td>
+<td>Listar vehiculos</td>
+<td>Admin</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/v1/summary/daily</code></td>
+<td>Resumen diario</td>
+<td>Bearer</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/v1/summary/totals</code></td>
+<td>Totales del periodo</td>
+<td>Bearer</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/v1/sync/logs</code></td>
+<td>Logs de sincronizacion</td>
+<td>Admin</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/v1/sync/{source}</code></td>
+<td>Iniciar sincronizacion</td>
+<td>Admin</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/v1/validations</code></td>
+<td>Incidencias pendientes</td>
+<td>Admin</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/v1/validations/{id}/resolve</code></td>
+<td>Resolver incidencia</td>
+<td>Admin</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/v1/visa-payments</code></td>
+<td>Pagos VISA</td>
+<td>Admin</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/v1/fuel-expenses</code></td>
+<td>Gastos combustible</td>
+<td>Admin</td>
+</tr>
+</tbody>
+</table>
+<h3 id="143-filtros-comunes">14.3 Filtros comunes</h3>
+<table>
+<thead>
+<tr>
+<th>Parametro</th>
+<th>Tipo</th>
+<th>Descripcion</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>driver_id</code></td>
+<td>string</td>
+<td>Filtrar por conductor</td>
+</tr>
+<tr>
+<td><code>source</code></td>
+<td>string</td>
+<td>Filtrar por plataforma (prima/freenow/uber)</td>
+</tr>
+<tr>
+<td><code>date_from</code></td>
+<td>date</td>
+<td>Fecha inicio (YYYY-MM-DD)</td>
+</tr>
+<tr>
+<td><code>date_to</code></td>
+<td>date</td>
+<td>Fecha fin (YYYY-MM-DD)</td>
+</tr>
+<tr>
+<td><code>page</code></td>
+<td>int</td>
+<td>Pagina (default: 1)</td>
+</tr>
+<tr>
+<td><code>per_page</code></td>
+<td>int</td>
+<td>Registros por pagina (default: 50)</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="15-sistema-de-trabajos-asincronos">15. Sistema de Trabajos Asincronos</h2>
+<h3 id="151-arquitectura-arq-redis">15.1 Arquitectura Arq + Redis</h3>
+<p><pre class="mermaid">graph LR
+    subgraph "Docker Compose"
+        API["taxi-api<br>FastAPI + Uvicorn<br>Puerto 8000"]
+        WORKER["taxi-worker<br>Arq Worker<br>+ Playwright"]
+        REDIS["taxi-redis<br>Redis 7<br>Puerto 6379"]
+        DB["taxi-db<br>PostgreSQL 16<br>Puerto 5432"]
+    end
+
+    API --> DB
+    API --> REDIS
+    WORKER --> DB
+    WORKER --> REDIS
+    API -.->|"Encola trabajos"| REDIS
+    WORKER -.->|"Consume trabajos"| REDIS</pre>3</p>
+<h3 id="152-ciclo-de-vida-de-un-trabajo">15.2 Ciclo de vida de un trabajo</h3>
+<p><pre class="mermaid">graph LR
+    subgraph "Docker Compose"
+        API["taxi-api<br>FastAPI + Uvicorn<br>Puerto 8000"]
+        WORKER["taxi-worker<br>Arq Worker<br>+ Playwright"]
+        REDIS["taxi-redis<br>Redis 7<br>Puerto 6379"]
+        DB["taxi-db<br>PostgreSQL 16<br>Puerto 5432"]
+    end
+
+    API --> DB
+    API --> REDIS
+    WORKER --> DB
+    WORKER --> REDIS
+    API -.->|"Encola trabajos"| REDIS
+    WORKER -.->|"Consume trabajos"| REDIS</pre>4</p>
+<h3 id="153-proteccion-contra-ejecucion-doble">15.3 Proteccion contra ejecucion doble</h3>
+<p>Antes de encolar un nuevo trabajo, el sistema verifica que no haya un SyncLog con <code>status="running"</code> para la misma plataforma. Si existe, redirige sin encolar.</p>
+<hr />
+<h2 id="16-cumplimiento-gdpr">16. Cumplimiento GDPR</h2>
+<h3 id="161-anonimizacion-de-datos-gps">16.1 Anonimizacion de datos GPS</h3>
+<ul>
+<li><strong>Politica</strong>: Datos GPS (coordenadas origen/destino) se anulan despues de 90 dias</li>
+<li><strong>Funcion</strong>: <code>gdpr_service.anonymize_old_gps(session)</code></li>
+<li><strong>Campos</strong>: <code>origin_lat</code>, <code>origin_lng</code>, <code>dest_lat</code>, <code>dest_lng</code> → <code>NULL</code></li>
+</ul>
+<h3 id="162-purgado-de-tokens">16.2 Purgado de tokens</h3>
+<ul>
+<li><strong>Politica</strong>: Tokens de plataforma expirados o revocados se eliminan</li>
+<li><strong>Funcion</strong>: <code>gdpr_service.purge_expired_tokens(session)</code></li>
+<li><strong>Criterios</strong>: <code>expires_at &lt; now</code> OR <code>is_valid == False</code> OR <code>revoked_at IS NOT NULL</code></li>
+</ul>
+<h3 id="163-solicitudes-de-acceso-dsr">16.3 Solicitudes de acceso (DSR)</h3>
+<ul>
+<li><strong>Modelo</strong>: <code>DsrRequest</code> para rastrear solicitudes de acceso a datos personales</li>
+<li><strong>Tipos</strong>: access (consulta), deletion (eliminacion), rectification (correccion)</li>
+</ul>
+<hr />
+<h2 id="17-despliegue-y-operaciones">17. Despliegue y Operaciones</h2>
+<h3 id="171-arquitectura-de-despliegue">17.1 Arquitectura de despliegue</h3>
+<p><pre class="mermaid">graph LR
+    subgraph "Docker Compose"
+        API["taxi-api<br>FastAPI + Uvicorn<br>Puerto 8000"]
+        WORKER["taxi-worker<br>Arq Worker<br>+ Playwright"]
+        REDIS["taxi-redis<br>Redis 7<br>Puerto 6379"]
+        DB["taxi-db<br>PostgreSQL 16<br>Puerto 5432"]
+    end
+
+    API --> DB
+    API --> REDIS
+    WORKER --> DB
+    WORKER --> REDIS
+    API -.->|"Encola trabajos"| REDIS
+    WORKER -.->|"Consume trabajos"| REDIS</pre>5</p>
+<h3 id="172-pipeline-cicd">17.2 Pipeline CI/CD</h3>
+<p><pre class="mermaid">graph LR
+    subgraph "Docker Compose"
+        API["taxi-api<br>FastAPI + Uvicorn<br>Puerto 8000"]
+        WORKER["taxi-worker<br>Arq Worker<br>+ Playwright"]
+        REDIS["taxi-redis<br>Redis 7<br>Puerto 6379"]
+        DB["taxi-db<br>PostgreSQL 16<br>Puerto 5432"]
+    end
+
+    API --> DB
+    API --> REDIS
+    WORKER --> DB
+    WORKER --> REDIS
+    API -.->|"Encola trabajos"| REDIS
+    WORKER -.->|"Consume trabajos"| REDIS</pre>6</p>
+<h3 id="173-variables-de-entorno-requeridas">17.3 Variables de entorno requeridas</h3>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Descripcion</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>DATABASE_URL</code></td>
+<td>URL PostgreSQL</td>
+</tr>
+<tr>
+<td><code>SECRET_KEY</code></td>
+<td>Clave para firma JWT</td>
+</tr>
+<tr>
+<td><code>REDIS_URL</code></td>
+<td>URL Redis</td>
+</tr>
+<tr>
+<td><code>FREENOW_EMAIL</code> / <code>FREENOW_PASSWORD</code></td>
+<td>Credenciales cuenta 1</td>
+</tr>
+<tr>
+<td><code>FREENOW_2_EMAIL</code> / <code>FREENOW_2_PASSWORD</code></td>
+<td>Credenciales cuenta 2</td>
+</tr>
+<tr>
+<td><code>PRIMA_EMAIL</code> / <code>PRIMA_PASSWORD</code></td>
+<td>Credenciales Prima</td>
+</tr>
+<tr>
+<td><code>SMTP_HOST</code> / <code>SMTP_PORT</code> / <code>SMTP_USER</code> / <code>SMTP_PASSWORD</code></td>
+<td>Config SMTP</td>
+</tr>
+<tr>
+<td><code>ALERT_EMAIL_TO</code></td>
+<td>Email para alertas</td>
+</tr>
+<tr>
+<td><code>ROOT_PATH</code></td>
+<td>Path base (para reverse proxy)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="174-comandos-operativos">17.4 Comandos operativos</h3>
+<pre><code class="language-bash"># Levantar servicios
+docker compose up -d
+
+# Ver logs
+docker logs taxi-api -f
+docker logs taxi-worker -f
+
+# Ejecutar migraciones
+docker exec taxi-api alembic upgrade head
+
+# Acceder a la base de datos
+docker exec -it taxi-db psql -U taxi -d taxi_api
+
+# Reconstruir imagen
+docker compose build --no-cache taxi-api
+docker compose up -d
+</code></pre>
+<hr />
+<h2 id="18-estructura-de-archivos-del-proyecto">18. Estructura de Archivos del Proyecto</h2>
+<pre><code>TAXI2/
+├── src/
+│   ├── main.py                      # FastAPI app, routers, middleware
+│   ├── config.py                    # Settings (env vars, credenciales)
+│   ├── database.py                  # SQLAlchemy engine + session
+│   ├── template_config.py           # Jinja2 templates config
+│   ├── models/
+│   │   ├── __init__.py              # Exporta todos los modelos
+│   │   ├── owner.py                 # Owner model
+│   │   ├── driver.py                # Driver model (comisiones)
+│   │   ├── vehicle.py               # Vehicle model
+│   │   ├── trip.py                  # Trip model (multi-plataforma)
+│   │   ├── shift.py                 # Shift model
+│   │   ├── fuel_expense.py          # FuelExpense model
+│   │   ├── other_expense.py         # OtherExpense model
+│   │   ├── freenow_adjustment.py    # FreenowAdjustment model
+│   │   ├── tpv_daily_total.py       # TpvDailyTotal model
+│   │   ├── uber_daily_summary.py    # UberDailySummary model
+│   │   ├── visa_payment.py          # VisaPayment model
+│   │   ├── pending_validation.py    # PendingValidation model
+│   │   ├── sync_log.py              # SyncLog model
+│   │   ├── freenow_import.py        # FreeNowImport model
+│   │   ├── daily_summary.py         # DailySummary model
+│   │   ├── platform_token.py        # PlatformToken model
+│   │   └── dsr_request.py           # DsrRequest model (GDPR)
+│   ├── routes/
+│   │   ├── auth.py                  # Login, logout, JWT
+│   │   ├── dashboard.py             # KPI dashboard mensual
+│   │   ├── liquidacion.py           # Calculo liquidacion
+│   │   ├── upload.py                # Carga CSV/XLSX
+│   │   ├── sync.py                  # Sincronizacion scrapers
+│   │   ├── trips.py                 # Listado viajes
+│   │   ├── admin.py                 # Gestion conductores/vehiculos
+│   │   ├── validation.py            # Validacion incidencias
+│   │   ├── export.py                # Export CSV
+│   │   ├── summary.py               # Resumen diario
+│   │   └── api_v1.py                # API REST v1
+│   ├── services/
+│   │   ├── settlement_calculator.py # Motor de liquidacion
+│   │   ├── incident_detector.py     # Deteccion incidencias
+│   │   ├── excel_exporter.py        # Export Excel
+│   │   ├── pdf_exporter.py          # Export PDF
+│   │   ├── job_service.py           # Encolado Arq
+│   │   ├── auth_service.py          # JWT + bcrypt
+│   │   ├── trip_service.py          # Analytics viajes
+│   │   ├── trip_matcher.py          # Match Prima↔FreeNow/Uber
+│   │   ├── csv_validator.py         # Validacion esquema CSV
+│   │   ├── email_service.py         # Notificaciones SMTP
+│   │   ├── gap_detector.py          # Deteccion gaps sync
+│   │   ├── gdpr_service.py          # Anonimizacion GDPR
+│   │   ├── token_encryption.py      # Cifrado tokens
+│   │   └── summary_service.py       # Servicio resumenes
+│   ├── workers/
+│   │   ├── tasks.py                 # Jobs Arq (sync_freenow, sync_prima)
+│   │   └── settings.py              # Config Redis worker
+│   ├── templates/                   # Templates Jinja2 (14 archivos)
+│   └── static/                      # Archivos estaticos
+├── scripts/
+│   └── parsers/
+│       ├── freenow_parser.py        # Parser CSV FreeNow
+│       ├── prima_parser.py          # Parser CSV Prima
+│       ├── uber_parser.py           # Parser CSV Uber
+│       ├── lacaixa_parser.py        # Parser XLSX La Caixa
+│       ├── petroprix_parser.py      # Parser CSV Petroprix
+│       └── repsol_parser.py         # Parser XLSX Repsol
+├── scrapers/
+│   ├── base_scraper.py              # Base class Playwright
+│   ├── freenow_scraper.py           # Scraper portal FreeNow
+│   ├── prima_scraper.py             # Scraper portal Prima
+│   └── uber_scraper.py              # Scraper portal Uber
+├── migrations/
+│   └── versions/                    # Migraciones Alembic
+├── tests/
+│   └── unit/                        # Tests unitarios
+├── docker-compose.yml               # Orquestacion contenedores
+├── Dockerfile.prod                  # Imagen produccion
+└── alembic.ini                      # Config Alembic
+</code></pre>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+<script>
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'default',
+    securityLevel: 'loose',
+    flowchart: { useMaxWidth: true, htmlLabels: true },
+  });
+</script>
+</body>
+</html>
