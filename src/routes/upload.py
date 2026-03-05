@@ -624,7 +624,7 @@ async def add_freenow_adjustment(
         ("Otros", fecha_otros, importe_otros, "otros"),
         ("Incentivos", fecha_incentivos, importe_incentivos, "incentivos"),
     ]:
-        if not fecha or not importe:
+        if not fecha:
             continue
         try:
             expense_date = dt.strptime(fecha.strip(), "%d/%m/%y").date()
