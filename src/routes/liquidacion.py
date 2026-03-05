@@ -170,20 +170,18 @@ def _get_daily_data(session: Session, driver_id: str, vehicle: Vehicle | None,
         if t.fare_type != "METERED"
     )
 
-    # FreeNow APP-paid bruto (paid via app, not cash)
+    # FreeNow APP-paid bruto (paid via app, not cash — all fare types)
     freenow_app_paid_bruto = sum(
         Decimal(str(t.gross_amount or 0))
         for t in freenow_trips
-        if t.fare_type != "METERED"
-        and t.payment_method in ("APP", "tarjeta")
+        if t.payment_method in ("APP", "tarjeta")
     )
 
-    # FreeNow APP-paid tips
+    # FreeNow APP-paid tips (all fare types)
     freenow_app_tips = sum(
         abs(Decimal(str(t.tips or 0)))
         for t in freenow_trips
-        if t.fare_type != "METERED"
-        and t.payment_method in ("APP", "tarjeta")
+        if t.payment_method in ("APP", "tarjeta")
     )
 
     # FreeNow CASH bruto (all cash trips, FIXED and METERED)
