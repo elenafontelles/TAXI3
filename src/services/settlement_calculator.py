@@ -83,6 +83,7 @@ def calculate_daily_settlement(
     other_expenses_total: Decimal,
     driver_config: dict,
     freenow_adjustments: Decimal = Decimal("0.00"),
+    freenow_cash_bruto: Decimal = Decimal("0.00"),
 ) -> dict:
     """Calculate complete daily settlement for a driver.
 
@@ -152,7 +153,11 @@ def calculate_daily_settlement(
     if freenow_commission_driver_pct == 0:
         freenow_app = freenow_app_paid_bruto + freenow_app_tips + freenow_adjustments
     else:
-        freenow_app = calculate_freenow_net(freenow_app_paid_bruto) + freenow_app_tips + freenow_adjustments
+        # Commission on cash trips: FreeNow deducts it from the transfer
+        freenow_cash_commission = (freenow_cash_bruto * Decimal("0.125") * Decimal("1.21")).quantize(
+            Decimal("0.01"), rounding=ROUND_HALF_UP)
+        freenow_app = (calculate_freenow_net(freenow_app_paid_bruto)
+                       + freenow_app_tips + freenow_adjustments - freenow_cash_commission)
 
     # 8. Anticipado = recaudacion_neta - tpv_visa - freenow_app - uber_total_payment
     #               - otros_gastos - gasolina (si fuel_deducted_from_driver)

@@ -186,6 +186,14 @@ def _get_daily_data(session: Session, driver_id: str, vehicle: Vehicle | None,
         and t.payment_method in ("APP", "tarjeta")
     )
 
+    # FreeNow CASH bruto (all cash trips, FIXED and METERED)
+    # Used to calculate cash commission deducted from AppFN
+    freenow_cash_bruto = sum(
+        Decimal(str(t.gross_amount or 0))
+        for t in freenow_trips
+        if t.payment_method in ("CASH", "efectivo")
+    )
+
     # Uber: query UberDailySummary by license_number (primary) or vehicle_id (fallback)
     uber_t3_fixed = Decimal("0.00")
     uber_total_payment = Decimal("0.00")
@@ -254,6 +262,7 @@ def _get_daily_data(session: Session, driver_id: str, vehicle: Vehicle | None,
         "tpv_visa_total": tpv_visa_total,
         "freenow_app_paid_bruto": freenow_app_paid_bruto,
         "freenow_app_tips": freenow_app_tips,
+        "freenow_cash_bruto": freenow_cash_bruto,
         "uber_total_payment": uber_total_payment,
         "fuel_total": fuel_total,
         "other_expenses_total": other_expenses_total,
