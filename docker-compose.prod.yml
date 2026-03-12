@@ -54,6 +54,7 @@ services:
 
   taxi-worker:
     image: ghcr.io/ivantintore/taxi-api:latest
+    init: true
     container_name: taxi-worker
     command: arq src.workers.settings.WorkerSettings
     restart: unless-stopped
