@@ -22,10 +22,7 @@ class Settings(BaseSettings):
     SMTP_PASSWORD: str = ""
     ALERT_EMAIL_TO: str = ""
 
-    # Redis (job queue)
-    REDIS_URL: str = "redis://localhost:6379"
-
-    # Platform credentials (Playwright scrapers)
+    # Platform credentials — .env fallback (prefer DB via /admin/credenciales)
     UBER_EMAIL: str = ""
     UBER_PASSWORD: str = ""
     FREENOW_EMAIL: str = ""

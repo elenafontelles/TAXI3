@@ -63,9 +63,9 @@ class PrimaScraper(BaseScraper):
                else self.start_date.isoformat())
         output_path = os.path.join(self.imports_dir, f"prima_{tag}.csv")
 
+        # Always re-download (no file cache) to get fresh data
         if os.path.exists(output_path):
-            print(f"Already downloaded: {output_path}")
-            return output_path
+            os.remove(output_path)
 
         def scrape(page):
             # 1) Login

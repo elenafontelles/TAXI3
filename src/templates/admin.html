@@ -1,7 +1,12 @@
 {% extends "base.html" %}
 {% block title %}Administracion - TAXI API{% endblock %}
 {% block content %}
-<h4>Administracion</h4>
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h4>Administracion</h4>
+    <a href="{{ root_path }}/admin/credenciales" class="btn btn-outline-primary btn-sm">
+        Credenciales de plataformas
+    </a>
+</div>
 
 <div class="card mb-4">
     <div class="card-header d-flex justify-content-between align-items-center">

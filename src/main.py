@@ -14,7 +14,7 @@ from src.routes.dashboard import router as dashboard_router
 from src.routes.trips import router as trips_router
 from src.routes.export import router as export_router
 from src.routes.upload import router as upload_router
-from src.routes.sync import router as sync_router
+from src.routes.download import router as download_router
 from src.routes.admin import router as admin_router
 from src.routes.validation import router as validation_router
 from src.routes.liquidacion import router as liquidacion_router
@@ -58,7 +58,7 @@ app.include_router(dashboard_router)
 app.include_router(trips_router)
 app.include_router(export_router)
 app.include_router(upload_router)
-app.include_router(sync_router)
+app.include_router(download_router)
 app.include_router(admin_router)
 app.include_router(validation_router)
 app.include_router(liquidacion_router)

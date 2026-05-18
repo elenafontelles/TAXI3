@@ -18,20 +18,6 @@ services:
       timeout: 5s
       retries: 5
 
-  redis:
-    image: redis:7-alpine
-    container_name: taxi-redis
-    restart: unless-stopped
-    volumes:
-      - redis_data:/data
-    ports:
-      - "6379:6379"
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
   api:
     build: .
     container_name: taxi-api
@@ -40,42 +26,15 @@ services:
       - .env
     environment:
       DATABASE_URL: postgresql://${DB_USER:-taxi_admin}:${DB_PASSWORD}@db:5432/${DB_NAME:-taxi_api}
-      REDIS_URL: redis://redis:6379
     ports:
       - "${API_PORT:-8000}:8000"
     depends_on:
       db:
         condition: service_healthy
-      redis:
-        condition: service_healthy
     volumes:
       - ./src:/app/src:ro
       - ./scrapers:/app/scrapers:ro
       - ./imports:/app/imports
-
-  worker:
-    build: .
-    container_name: taxi-worker
-    command: arq src.workers.settings.WorkerSettings
-    restart: unless-stopped
-    env_file:
-      - .env
-    environment:
-      DATABASE_URL: postgresql://${DB_USER:-taxi_admin}:${DB_PASSWORD}@db:5432/${DB_NAME:-taxi_api}
-      REDIS_URL: redis://redis:6379
-    depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    volumes:
-      - ./src:/app/src:ro
-      - ./scrapers:/app/scrapers:ro
-      - ./scripts:/app/scripts:ro
-      - ./imports:/app/imports
-    healthcheck:
-      disable: true
 
 volumes:
   postgres_data:
-  redis_data:

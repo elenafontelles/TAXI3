@@ -11,7 +11,6 @@ from src.database import get_session
 from src.models.trip import Trip
 from src.models.driver import Driver
 from src.models.vehicle import Vehicle
-from src.models.sync_log import SyncLog
 from src.models.pending_validation import PendingValidation
 from src.models.visa_payment import VisaPayment
 from src.models.fuel_expense import FuelExpense
@@ -248,72 +247,6 @@ async def summary_totals(
         "km": float(row.km),
         "tips": float(row.tips),
     }
-
-
-# ── Sync ──────────────────────────────────────────────────────
-
-@router.get("/sync/logs")
-async def sync_logs(
-    user: dict = Depends(require_api_admin),
-    session: Session = Depends(get_session),
-    limit: int = Query(20, ge=1, le=100),
-):
-    logs = session.query(SyncLog).order_by(SyncLog.started_at.desc()).limit(limit).all()
-    return [
-        {
-            "id": l.id,
-            "source": l.source,
-            "sync_type": l.sync_type,
-            "status": l.status,
-            "records_found": l.records_found,
-            "records_created": l.records_created,
-            "records_skipped": l.records_skipped,
-            "error_message": l.error_message,
-            "started_at": l.started_at.isoformat() if l.started_at else None,
-            "completed_at": l.completed_at.isoformat() if l.completed_at else None,
-            "duration_seconds": float(l.duration_seconds) if l.duration_seconds else None,
-        }
-        for l in logs
-    ]
-
-
-@router.post("/sync/{source}")
-@limiter.limit("2/minute")
-async def trigger_sync(
-    request: Request,
-    source: str,
-    user: dict = Depends(require_api_admin),
-    session: Session = Depends(get_session),
-    start_date: str = Query(""),
-    end_date: str = Query(""),
-):
-    """Trigger a sync job for FreeNow or Prima."""
-    if source not in ("freenow", "prima"):
-        raise HTTPException(status_code=400, detail="Source must be 'freenow' or 'prima'")
-
-    from datetime import datetime, timezone
-    from src.services.job_service import enqueue_sync
-
-    yesterday = date.today() - timedelta(days=1)
-    sd = date.fromisoformat(start_date) if start_date else yesterday
-    ed = date.fromisoformat(end_date) if end_date else sd
-
-    # Guard against double-runs
-    already = session.query(SyncLog).filter_by(source=source, status="running").first()
-    if already:
-        raise HTTPException(status_code=409, detail=f"{source} sync already running")
-
-    log = SyncLog(
-        source=source,
-        sync_type="api",
-        status="running",
-        started_at=datetime.now(timezone.utc),
-    )
-    session.add(log)
-    session.commit()
-
-    job_id = await enqueue_sync(source, log.id, sd, ed)
-    return {"status": "queued", "log_id": log.id, "job_id": job_id}
 
 
 # ── Validations ───────────────────────────────────────────────

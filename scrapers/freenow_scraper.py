@@ -43,9 +43,9 @@ class FreeNowScraper(BaseScraper):
         label_suffix = f"_{self.account_label}" if self.account_label else ""
         output_path = os.path.join(self.imports_dir, f"freenow{label_suffix}_{tag}.csv")
 
+        # Always re-download (no file cache) to get fresh data
         if os.path.exists(output_path):
-            print(f"Already downloaded: {output_path}")
-            return output_path
+            os.remove(output_path)
 
         def scrape(page):
             # 1) Login
