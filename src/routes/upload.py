@@ -18,6 +18,7 @@ from src.models.tpv_daily_total import TpvDailyTotal
 from src.models.uber_daily_summary import UberDailySummary
 from src.models.other_expense import OtherExpense
 from src.models.freenow_adjustment import FreenowAdjustment
+from src.models.pending_validation import PendingValidation
 from src.template_config import templates
 
 logger = logging.getLogger(__name__)
@@ -141,13 +142,72 @@ def _resolve_driver_vehicle(record: dict, lookups: dict, fallback_driver: str, f
 
 
 @router.get("/upload", response_class=HTMLResponse)
-async def upload_page(request: Request, user: dict = Depends(require_admin), session: Session = Depends(get_session)):
+async def upload_page(
+    request: Request,
+    val_start_date: str = "",
+    val_end_date: str = "",
+    user: dict = Depends(require_admin),
+    session: Session = Depends(get_session),
+):
+    from datetime import date, datetime, time, timedelta
     drivers = session.query(Driver).filter_by(is_active=True).all()
     vehicles = session.query(Vehicle).filter_by(is_active=True).all()
+
+    incidents = []
+    incident_vehicles = {}
+
+    sd = date.fromisoformat(val_start_date) if val_start_date else None
+    ed = date.fromisoformat(val_end_date) if val_end_date else None
+
+    if sd and ed:
+        trips = session.query(Trip).filter(
+            Trip.source == "prima",
+            Trip.distance_km == 0,
+            Trip.duration_minutes < 0.5,
+            Trip.gross_amount != 0,
+            Trip.started_at >= datetime.combine(sd, time.min),
+            Trip.started_at < datetime.combine(ed + timedelta(days=1), time.min),
+        ).order_by(Trip.started_at).all()
+
+        for trip in trips:
+            pv = session.query(PendingValidation).filter_by(
+                trip_id=trip.id, validation_type="incident"
+            ).first()
+
+            if pv and pv.status in ("valid", "invalid"):
+                continue
+
+            if not pv:
+                pv = PendingValidation(
+                    trip_id=trip.id,
+                    validation_type="incident",
+                    status="pending",
+                    details={
+                        "distance_km": float(trip.distance_km or 0),
+                        "duration_minutes": float(trip.duration_minutes or 0),
+                    },
+                )
+                session.add(pv)
+                session.flush()
+
+            incidents.append({"pv": pv, "trip": trip})
+
+            if trip.vehicle_id:
+                vehicle = session.get(Vehicle, trip.vehicle_id)
+                if vehicle:
+                    incident_vehicles[pv.id] = vehicle.plate
+
+        session.commit()
+
     return templates.TemplateResponse(request, "upload.html", {
         "user": user,
         "drivers": drivers,
         "vehicles": vehicles,
+        "val_start_date": val_start_date,
+        "val_end_date": val_end_date,
+        "incidents": incidents,
+        "incident_vehicles": incident_vehicles,
+        "total_pending": len(incidents),
     })
 
 
@@ -670,4 +730,9 @@ async def _render_result(request, session, user, success=None, error=None):
         "vehicles": vehicles,
         "success": success,
         "error": error,
+        "val_start_date": "",
+        "val_end_date": "",
+        "incidents": [],
+        "incident_vehicles": {},
+        "total_pending": 0,
     })

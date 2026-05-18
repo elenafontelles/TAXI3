@@ -24,7 +24,21 @@
 {% endblock %}
 
 {% block content %}
-<h4>Dashboard <small class="text-muted">{{ month_label }}</small></h4>
+<h4>Dashboard <small class="text-muted">{{ start_date }} — {{ end_date }}</small></h4>
+
+<form method="get" action="{{ root_path }}/" class="row g-2 align-items-end mb-4">
+    <div class="col-md-3">
+        <label class="form-label small">Fecha inicio</label>
+        <input type="date" class="form-control form-control-sm" name="start_date" value="{{ start_date }}">
+    </div>
+    <div class="col-md-3">
+        <label class="form-label small">Fecha fin</label>
+        <input type="date" class="form-control form-control-sm" name="end_date" value="{{ end_date }}">
+    </div>
+    <div class="col-md-2">
+        <button type="submit" class="btn btn-primary btn-sm">Filtrar</button>
+    </div>
+</form>
 
 {% if driver_kpis %}
 <!-- KPI Comparison Table -->

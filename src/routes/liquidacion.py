@@ -419,6 +419,7 @@ async def export_liquidacion(
         end_date=end_date,
         results=results,
         totals=totals,
+        fuel_deducted=bool(driver.fuel_deducted_from_driver),
     )
 
     filename = f"liquidacion_{driver.name.replace(' ', '_')}_{start_date}_{end_date}.xlsx"

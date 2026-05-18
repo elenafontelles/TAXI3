@@ -166,6 +166,72 @@
     </div>
 </div>
 
+<div class="card mt-4">
+    <div class="card-header">Validacion de incidencias</div>
+    <div class="card-body">
+        <form method="get" action="{{ root_path }}/upload">
+            <div class="row mb-3">
+                <div class="col-md-3">
+                    <label for="val_start_date" class="form-label">Fecha inicio</label>
+                    <input type="date" class="form-control" id="val_start_date" name="val_start_date"
+                           value="{{ val_start_date }}" required>
+                </div>
+                <div class="col-md-3">
+                    <label for="val_end_date" class="form-label">Fecha fin</label>
+                    <input type="date" class="form-control" id="val_end_date" name="val_end_date"
+                           value="{{ val_end_date }}" required>
+                </div>
+                <div class="col-md-2 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary w-100">Buscar</button>
+                </div>
+            </div>
+        </form>
+
+        {% if val_start_date and val_end_date %}
+        <p class="text-muted">{{ total_pending }} incidencia(s) pendiente(s)</p>
+        {% if incidents %}
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>Fecha viaje</th>
+                    <th>Matricula</th>
+                    <th>Importe</th>
+                    <th>Detalles</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in incidents %}
+                <tr>
+                    <td>{{ item.trip.started_at.strftime('%d/%m/%Y %H:%M') }}</td>
+                    <td>{{ incident_vehicles.get(item.pv.id, '—') }}</td>
+                    <td>{{ "%.2f"|format(item.trip.gross_amount or 0) }} EUR</td>
+                    <td>
+                        <small>
+                            dist: {{ item.trip.distance_km or 0 }} km,
+                            dur: {{ item.trip.duration_minutes or 0 }} min
+                        </small>
+                    </td>
+                    <td>
+                        <form action="{{ root_path }}/validacion/{{ item.pv.id }}/resolve" method="post" class="d-inline">
+                            <input type="hidden" name="start_date" value="{{ val_start_date }}">
+                            <input type="hidden" name="end_date" value="{{ val_end_date }}">
+                            <input type="hidden" name="redirect_to" value="upload">
+                            <button type="submit" name="action" value="valid" class="btn btn-sm btn-success">Valido</button>
+                            <button type="submit" name="action" value="invalid" class="btn btn-sm btn-danger">No valido</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="text-muted mb-0">No hay incidencias pendientes en este periodo.</p>
+        {% endif %}
+        {% endif %}
+    </div>
+</div>
+
 {% endblock %}
 
 {% block scripts %}

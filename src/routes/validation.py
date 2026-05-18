@@ -89,6 +89,7 @@ async def resolve_validation(
     action: str = Form(...),
     start_date: str = Form(""),
     end_date: str = Form(""),
+    redirect_to: str = Form(""),
     user: dict = Depends(require_admin),
     session: Session = Depends(get_session),
 ):
@@ -102,6 +103,11 @@ async def resolve_validation(
     pv.resolved_at = datetime.now(timezone.utc)
     pv.resolved_by = user.get("name", "admin")
     session.commit()
+    if redirect_to == "upload":
+        params = ""
+        if start_date or end_date:
+            params = f"?val_start_date={start_date}&val_end_date={end_date}"
+        return RedirectResponse(url=f"{root_path}/upload{params}", status_code=303)
     params = ""
     if start_date or end_date:
         params = f"?start_date={start_date}&end_date={end_date}"

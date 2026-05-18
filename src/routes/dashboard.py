@@ -1,7 +1,7 @@
 # src/routes/dashboard.py
 from datetime import date, timedelta
 from decimal import Decimal
-from fastapi import APIRouter, Request, Depends
+from fastapi import APIRouter, Request, Depends, Query
 from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import func
@@ -202,9 +202,18 @@ async def dashboard(
     request: Request,
     user: dict = Depends(require_auth),
     session: Session = Depends(get_session),
+    start_date: str = Query(""),
+    end_date: str = Query(""),
 ):
     today = date.today()
-    start_of_month = today.replace(day=1)
+    if start_date and end_date:
+        sd = date.fromisoformat(start_date)
+        ed = date.fromisoformat(end_date)
+    else:
+        sd = today.replace(day=1)
+        ed = today
+        start_date = sd.isoformat()
+        end_date = ed.isoformat()
 
     drivers = session.query(Driver).filter(
         Driver.is_active == True, Driver.is_owner == False
@@ -212,11 +221,12 @@ async def dashboard(
 
     driver_kpis = []
     for d in drivers:
-        kpis = _get_driver_kpis(session, d, start_of_month, today)
+        kpis = _get_driver_kpis(session, d, sd, ed)
         driver_kpis.append(kpis)
 
     return templates.TemplateResponse(request, "dashboard.html", {
         "user": user,
         "driver_kpis": driver_kpis,
-        "month_label": today.strftime("%B %Y"),
+        "start_date": start_date,
+        "end_date": end_date,
     })
